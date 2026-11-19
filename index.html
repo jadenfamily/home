@@ -213,11 +213,13 @@
     position:fixed; inset:0; z-index:85; display:flex; align-items:center; justify-content:center;
     padding:clamp(8px,1.6vw,22px); background:rgba(45,30,10,.45);
     -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+    overflow:hidden; overscroll-behavior:contain; touch-action:none;
   }
   .hist-card{
-    width:100%; max-width:700px; max-height:94vh; display:flex; flex-direction:column;
+    width:100%; max-width:700px; max-height:94vh; max-height:calc(100dvh - 20px); display:flex; flex-direction:column;
     background:#fffdf9; border-radius:28px; overflow:hidden;
     box-shadow:0 26px 64px rgba(0,0,0,.3); animation:popIn .3s cubic-bezier(.2,1.2,.4,1);
+    overscroll-behavior:contain;
   }
   .hist-head{
     flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -233,6 +235,7 @@
   .hist-close:active{ transform:scale(.94); }
   .hist-body{
     padding:14px 16px 18px; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain; touch-action:pan-y;
     display:flex; flex-direction:column; gap:13px;
   }
   .acct-list{ display:flex; flex-direction:column; gap:8px; }
@@ -927,6 +930,34 @@
   }
 
   /* ============ 계정 관리 ============ */
+  /* iOS Safari는 body overflow만으로는 뒷페이지 스크롤을 막지 못해서 body를 fixed로 고정한다. */
+  var scrollLock = { on: false, y: 0 };
+  function lockBodyScroll() {
+    if (scrollLock.on) return;
+    scrollLock.y = window.scrollY || window.pageYOffset || 0;
+    var b = document.body, h = document.documentElement;
+    b.style.position = 'fixed';
+    b.style.top = '-' + scrollLock.y + 'px';
+    b.style.left = '0';
+    b.style.right = '0';
+    b.style.width = '100%';
+    b.style.overflow = 'hidden';
+    h.style.overflow = 'hidden';
+    scrollLock.on = true;
+  }
+  function unlockBodyScroll() {
+    if (!scrollLock.on) return;
+    var b = document.body, h = document.documentElement;
+    b.style.position = '';
+    b.style.top = '';
+    b.style.left = '';
+    b.style.right = '';
+    b.style.width = '';
+    b.style.overflow = '';
+    h.style.overflow = '';
+    scrollLock.on = false;
+    window.scrollTo(0, scrollLock.y);
+  }
   function openAccounts() {
     if (!can('accounts')) return;
     acct.pwFor = '';
@@ -934,13 +965,14 @@
     acct.link = '';
     renderAccounts();
     var m = document.getElementById('acctModal');
-    if (m) m.hidden = false;
-    document.body.style.overflow = 'hidden';
+    if (!m) return;
+    m.hidden = false;
+    lockBodyScroll();
   }
   function closeAccounts() {
     var m = document.getElementById('acctModal');
     if (m) m.hidden = true;
-    if (!m || m.hidden) document.body.style.overflow = '';
+    unlockBodyScroll();
   }
   function acctCountAdmins() {
     var users = (cloud.users && cloud.users.users) || [];
