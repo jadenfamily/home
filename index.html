@@ -131,8 +131,7 @@
   .hub-tile .ht-go{ margin-top:auto; font-size:13px; font-weight:900; color:#0f6b8a; }
   .hub-tile.kids{ background:linear-gradient(155deg,#fff8e8 0%,#fff0f6 100%); border-color:#ffe2cc; }
   .hub-tile.fridge{ background:linear-gradient(155deg,#eaf7ff 0%,#f2f0ff 100%); border-color:#d9e8fb; }
-  .hub-tile.ledger{ background:#faf8f4; border-style:dashed; border-color:#e8ddcf; cursor:default; }
-  .hub-tile.ledger .ht-go{ color:#a99c8c; }
+  .hub-tile.ledger{ background:linear-gradient(155deg,#fffdf1 0%,#eefaf3 100%); border-color:#dceee3; }
   .hub-tile .ht-badge{
     position:absolute; top:14px; right:14px; font-size:10.5px; font-weight:900; padding:4px 9px;
     border-radius:999px; background:#fff; color:#8a6a2f; box-shadow:0 2px 8px rgba(0,0,0,.07);
@@ -376,7 +375,7 @@
   var DASHBOARDS = [
     { id: 'kids', emoji: '🌟', title: "Jaden's Today", desc: '하루 루틴 · 칭찬 스티커 · 학원 시간표', kind: 'link', cls: 'kids', url: '../kids-dashboard/' },
     { id: 'fridge', emoji: '🧊', title: '냉장고 파먹기', desc: '식재료 재고 · 장보기 알림 · 주간 식단', kind: 'link', cls: 'fridge', url: '../fridge-dashboard/' },
-    { id: 'ledger', emoji: '📒', title: '가계부', desc: '식비·생활비 기록을 한곳에 모아요', kind: 'soon', cls: 'ledger' }
+    { id: 'ledger', emoji: '📒', title: '가계부', desc: '수입·고정비·변동지출과 예산을 한곳에', kind: 'link', cls: 'ledger', url: '../ledger-dashboard/' }
   ];
 
   var cloud = { conn: null, users: null, me: null, session: null, status: 'idle', statusAt: 0, sha: {} };
