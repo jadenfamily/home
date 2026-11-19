@@ -276,6 +276,37 @@
   .hub-empty{ grid-column:1 / -1; display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; padding:34px 20px; border-radius:24px; border:2px dashed #eadfd1; background:#fffdf9; font-size:16px; font-weight:900; color:#6d6484; line-height:1.6; }
   .hub-empty span{ font-size:12.5px; font-weight:800; color:#a2937f; }
 
+  /* ---------- 테스트 데이터 초기화 (관리자 전용) ---------- */
+  .reset-note{ margin:0; font-size:11.5px; font-weight:800; color:#8a7f70; line-height:1.6; }
+  .reset-note b{ color:#6d6484; }
+  .reset-list{ display:flex; flex-direction:column; gap:11px; }
+  .reset-card{
+    display:flex; flex-direction:column; gap:9px; padding:14px 14px 13px;
+    border-radius:20px; border:2px solid #f1e6da; background:#fffdf9;
+  }
+  .reset-card.kids{ border-color:#ffe3b8; background:linear-gradient(140deg,#fff8ea 0%,#fffdf9 62%); }
+  .reset-card.fridge{ border-color:#cfe9ff; background:linear-gradient(140deg,#f1f9ff 0%,#fffdf9 62%); }
+  .reset-card.ledger{ border-color:#e6dfff; background:linear-gradient(140deg,#f6f3ff 0%,#fffdf9 62%); }
+  .reset-head{ display:flex; align-items:center; gap:8px; }
+  .reset-head .re-emoji{ font-size:19px; line-height:1; }
+  .reset-head b{ font-size:14.5px; font-weight:900; letter-spacing:-.015em; }
+  .reset-lines{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; }
+  .reset-lines li{ position:relative; padding-left:13px; font-size:11.5px; font-weight:800; color:#8a7f70; line-height:1.5; }
+  .reset-lines li:before{ content:'·'; position:absolute; left:2px; top:0; font-weight:900; }
+  .reset-lines li b{ color:#6d6484; }
+  .reset-lines li.keep{ color:#0f7a55; }
+  .reset-lines li.keep b{ color:#0a6b50; }
+  .reset-btn{
+    min-height:46px; border:none; border-radius:14px; cursor:pointer; touch-action:manipulation;
+    background:linear-gradient(135deg,#ffb15c,#ff7f7f); color:#fff; font-size:14px; font-weight:900;
+    box-shadow:0 8px 18px rgba(255,140,90,.28);
+  }
+  .reset-btn:active{ transform:translateY(1px); }
+  .reset-btn:disabled{ opacity:.55; box-shadow:none; cursor:default; }
+  .reset-msg{ margin:0; font-size:11.5px; font-weight:900; color:#0f7a55; line-height:1.5; }
+  .reset-msg.err{ color:#c6415a; }
+  .reset-msg:empty{ display:none; }
+
   /* ---------- 토스트 ---------- */
   .toast{
     position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom,0px)); transform:translate(-50%,14px);
@@ -317,6 +348,7 @@
         <span class="uc-av" id="ucAv">·</span>
         <span class="uc-meta"><b id="ucName">-</b><span class="uc-role" id="ucRole">-</span></span>
       </div>
+      <button class="edit-btn" type="button" id="resetBtn" data-act="reset-open" aria-haspopup="dialog" hidden><span class="bi" aria-hidden="true">🧹</span><span class="bl">초기화</span></button>
       <button class="edit-btn" type="button" id="accountsBtn" data-act="accounts-open" aria-haspopup="dialog" hidden><span class="bi" aria-hidden="true">👥</span><span class="bl">계정</span></button>
       <button class="edit-btn out-btn" type="button" data-act="logout"><span class="bi" aria-hidden="true">⏻</span><span class="bl">로그아웃</span></button>
     </div>
@@ -352,6 +384,16 @@
       <button class="hist-close" type="button" data-act="accounts-close" aria-label="계정 관리 닫기">✕</button>
     </div>
     <div class="hist-body" id="acctBody"></div>
+  </div>
+</div>
+
+<div class="hist" id="resetModal" hidden role="dialog" aria-modal="true" aria-labelledby="resetTitle">
+  <div class="hist-card">
+    <div class="hist-head">
+      <h2 id="resetTitle">🧹 테스트 데이터 초기화</h2>
+      <button class="hist-close" type="button" data-act="reset-close" aria-label="초기화 창 닫기">✕</button>
+    </div>
+    <div class="hist-body" id="resetBody"></div>
   </div>
 </div>
 
@@ -712,6 +754,9 @@
   function applyPermissions() {
     var accBtn = document.getElementById('accountsBtn');
     if (accBtn) accBtn.hidden = !can('accounts');
+    /* 초기화는 관리자만 — 보호자도 볼 수 없어요 */
+    var rBtn = document.getElementById('resetBtn');
+    if (rBtn) rBtn.hidden = !isAdmin();
   }
 
   function enterPortal() {
@@ -734,6 +779,7 @@
     if (portal) portal.hidden = true;
     if (login) login.hidden = false;
     closeAccounts(); /* 계정 팝업이 열려 있었다면 닫고 배경 스크롤 잠금도 푼다 */
+    closeReset(); /* 초기화 팝업도 마찬가지 */
     renderLoginBody(mode || (cloud.conn ? 'login' : 'setup'));
     renderSyncPill();
   }
@@ -913,6 +959,7 @@
     clearSession();
     cloud.me = null;
     closeAccounts();
+    closeReset();
     if (!silent) showToast('로그아웃했어요.');
     showLogin('login');
   }
@@ -1012,6 +1059,7 @@
   }
   function openAccounts() {
     if (!can('accounts')) return;
+    closeReset();
     acct.pwFor = '';
     acct.msg = '';
     acct.link = '';
@@ -1264,6 +1312,307 @@
     renderAccounts();
   }
 
+  /* ============ 테스트 데이터 초기화 (관리자 전용) ============ */
+  /* 가족이 실제로 쓰기 전에, 테스트로 쌓인 기록만 대시보드별로 지운다.
+     계정(config/users.json)과 루틴·시간표·교재·스티커 설정은 절대 건드리지 않는다. */
+  var resetState = { busy: '', msg: {} };
+
+  function isAdmin() { return !!(cloud.me && cloud.me.role === 'admin'); }
+  function nowIso() { return new Date().toISOString(); }
+  function isPlainObj(o) { return !!o && typeof o === 'object' && Object.prototype.toString.call(o) !== '[object Array]'; }
+  function asObj(o) { return isPlainObj(o) ? o : {}; }
+  function asArr(a) { return Object.prototype.toString.call(a) === '[object Array]' ? a : []; }
+  function todayKey() { var d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function todayPath() { var d = new Date(); return 'data/' + d.getFullYear() + '/' + pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()) + '.json'; }
+
+  /* 파일 하나 읽기: 없으면 null(건너뜀), 실패하면 out에 실패로 남기고 null */
+  async function resetRead(out, path, label) {
+    var res = await ghGet(path);
+    if (!res.ok) {
+      out.push({ path: path, label: label, ok: false, error: res.error || ('HTTP ' + (res.status || 0)) });
+      return null;
+    }
+    if (res.missing) {
+      out.push({ path: path, label: label, ok: true, skipped: true });
+      return null;
+    }
+    return asObj(res.data);
+  }
+  async function resetWrite(out, path, obj, label, message) {
+    var res = await ghPut(path, obj, message || ('테스트 초기화: ' + label));
+    out.push({ path: path, label: label, ok: !!res.ok, skipped: false, error: res.error || '' });
+    return res;
+  }
+
+  /* 1) Jaden's Today — 체크·스티커·펫 기록만 (루틴·시간표·교재는 유지) */
+  async function runKidsReset() {
+    var out = [];
+    var now = Date.now();
+    var iso = nowIso();
+
+    var st = await resetRead(out, 'config/stickers.json', '칭찬 스티커 기록');
+    if (st) {
+      st.version = st.version || 1;
+      st.unit = Number(st.unit) || 1000;
+      st.reasons = asArr(st.reasons); /* 보상 이유 목록은 그대로 */
+      st.total = 0;
+      st.log = [];
+      st.spends = [];
+      st.clearedAt = now;
+      st.updatedAt = iso;
+      await resetWrite(out, 'config/stickers.json', st, '칭찬 스티커 기록', '테스트 초기화: 칭찬 스티커 기록');
+    }
+
+    var dPath = todayPath();
+    var day = await resetRead(out, dPath, '오늘 기록');
+    if (day) {
+      day.version = day.version || 1;
+      day.date = todayKey();
+      day.updatedAt = iso;
+      day.by = (cloud.me && cloud.me.id) || '';
+      day.checks = {};
+      day.d = 0;
+      day.t = 0;
+      day.pct = 0;
+      day.cats = [];
+      day.workbooks = { sel: [], done: [] };
+      day.stickers = [];
+      day.spends = [];
+      day.boards = [];
+      day.board = { stickers: [], celebrated: false };
+      day.clearedAt = now;
+      await resetWrite(out, dPath, day, '오늘 기록', '테스트 초기화: 오늘 기록');
+    }
+
+    var cfg = await resetRead(out, 'config/settings.json', '펫·누적 기록');
+    if (cfg) {
+      var pet = asObj(cfg.pet);
+      pet.stage = 0;
+      pet.exp = 0;
+      pet.hatchedAt = 0;
+      pet.collection = [];
+      pet.awarded = {};
+      cfg.pet = pet;
+      cfg.stats = asObj(cfg.stats);
+      cfg.stats.stickersTotal = 0;
+      cfg.clearedAt = now;
+      cfg.updatedAt = iso;
+      await resetWrite(out, 'config/settings.json', cfg, '펫·누적 기록', '테스트 초기화: 펫 성장·누적 기록');
+    }
+    return out;
+  }
+
+  /* 2) 냉장고 파먹기 — 재고·장보기·식단 기록만 (예산과 화면 설정은 유지) */
+  async function runFridgeReset() {
+    var out = [];
+    var iso = nowIso();
+
+    var inv = await resetRead(out, 'fridge/inventory.json', '재고');
+    if (inv) {
+      inv.version = inv.version || 1;
+      inv.updatedAt = iso;
+      inv.items = [];
+      await resetWrite(out, 'fridge/inventory.json', inv, '재고', '테스트 초기화: 냉장고 재고');
+    }
+
+    var meals = await resetRead(out, 'fridge/meals.json', '식단·지출');
+    if (meals) {
+      meals.version = meals.version || 1;
+      meals.updatedAt = iso;
+      meals.budget = Number(meals.budget) || 0; /* 장보기 예산은 그대로 */
+      meals.weeks = {};
+      meals.expenses = [];
+      await resetWrite(out, 'fridge/meals.json', meals, '식단·지출', '테스트 초기화: 식단·장보기 지출');
+    }
+
+    var daily = await resetRead(out, 'fridge/daily.json', '장보기 기록');
+    if (daily) {
+      daily.version = daily.version || 1;
+      daily.updatedAt = iso;
+      daily.days = {};
+      await resetWrite(out, 'fridge/daily.json', daily, '장보기 기록', '테스트 초기화: 장보기 기록');
+    }
+
+    /* 장보기 알림 파일은 저장소에 있을 때만 지워요 */
+    var watch = await ghGet('fridge/watch.json');
+    if (!watch.ok) {
+      out.push({ path: 'fridge/watch.json', label: '장보기 알림', ok: false, error: watch.error || 'HTTP ' + (watch.status || 0) });
+    } else if (!watch.missing) {
+      var w = asObj(watch.data);
+      w.version = w.version || 1;
+      w.updatedAt = iso;
+      if (Object.prototype.toString.call(w.items) === '[object Array]') w.items = [];
+      else if (Object.prototype.toString.call(w.list) === '[object Array]') w.list = [];
+      else w.items = [];
+      await resetWrite(out, 'fridge/watch.json', w, '장보기 알림', '테스트 초기화: 장보기 알림');
+    }
+
+    /* AI 요리 추천은 지난 재고로 만든 것이라 함께 지우고, 화면 설정은 그대로 둬요 */
+    var fs = await resetRead(out, 'fridge/settings.json', 'AI 요리 추천');
+    if (fs) {
+      fs.version = fs.version || 1;
+      fs.updatedAt = iso;
+      fs.recipes = [];
+      fs.recipesAt = '';
+      await resetWrite(out, 'fridge/settings.json', fs, 'AI 요리 추천', '테스트 초기화: AI 요리 추천');
+    }
+    return out;
+  }
+
+  /* 3) 가계부 — 거래 내역·예산·고정비만 */
+  async function runLedgerReset() {
+    var out = [];
+    var iso = nowIso();
+
+    var tx = await resetRead(out, 'ledger/transactions.json', '수입·지출 내역');
+    if (tx) {
+      tx.version = tx.version || 1;
+      tx.updatedAt = iso;
+      tx.items = [];
+      await resetWrite(out, 'ledger/transactions.json', tx, '수입·지출 내역', '테스트 초기화: 가계부 내역');
+    }
+
+    var ls = await resetRead(out, 'ledger/settings.json', '예산·고정비');
+    if (ls) {
+      ls.version = ls.version || 1;
+      ls.updatedAt = iso;
+      ls.budgetDefault = 0;
+      ls.budgets = {};
+      ls.fixedTemplates = [];
+      ls.customCats = { expense: [], fixed: [], income: [] };
+      await resetWrite(out, 'ledger/settings.json', ls, '예산·고정비', '테스트 초기화: 가계부 예산·고정비');
+    }
+    return out;
+  }
+
+  var RESETS = [
+    {
+      id: 'kids', cls: 'kids', emoji: '🌟', title: "Jaden's Today 기록 초기화", btn: '기록 초기화',
+      doneText: "Jaden's Today 기록을 초기화했어요",
+      lines: [
+        { label: '지워요', text: '오늘 체크·완료율, 칭찬 스티커 적립·사용, 스티커 보드 기록' },
+        { label: '지워요', text: '펫 성장(경험치·도장·도감)과 누적 스티커 수' },
+        { label: '남겨요', keep: true, text: '하루 루틴, 시간표, 교재 목록, 스티커 칸 수·목표·보상 이유, 펫 그림' }
+      ],
+      confirm: '지워요\n· 오늘 체크와 완료율\n· 칭찬 스티커 적립·사용 기록과 보드 기록\n· 펫 경험치·도장·도감, 누적 스티커 수\n\n남겨요\n· 하루 루틴·시간표·교재\n· 스티커 칸 수·목표·보상 이유\n· 펫 이름·그림',
+      run: runKidsReset
+    },
+    {
+      id: 'fridge', cls: 'fridge', emoji: '🧊', title: '냉장고 파먹기 초기화', btn: '기록 초기화',
+      doneText: '냉장고 파먹기 기록을 초기화했어요',
+      lines: [
+        { label: '지워요', text: '재고 목록, 산 날·먹은 날·장보기 기록, 식단과 장보기 지출' },
+        { label: '지워요', text: '지난 재고로 만든 AI 요리 추천' },
+        { label: '남겨요', keep: true, text: '장보기 예산, 화면 설정·구역 이름·순서' }
+      ],
+      confirm: '지워요\n· 냉장고·냉동실 재고 목록\n· 산 날·먹은 날·장보기 기록\n· 주간 식단과 장보기 지출\n· 지난 재고로 만든 AI 요리 추천\n\n남겨요\n· 장보기 예산\n· 화면 설정·구역 이름·순서',
+      run: runFridgeReset
+    },
+    {
+      id: 'ledger', cls: 'ledger', emoji: '📒', title: '가계부 초기화', btn: '기록 초기화',
+      doneText: '가계부 기록을 초기화했어요',
+      lines: [
+        { label: '지워요', text: '수입·지출 내역, 월 예산, 고정비 템플릿, 직접 만든 분류' },
+        { label: '남겨요', keep: true, text: '계정과 대시보드 접근 권한' }
+      ],
+      confirm: '지워요\n· 수입·지출 내역 전체\n· 월 예산과 고정비 템플릿\n· 직접 추가한 분류\n\n남겨요\n· 가족 계정과 접근 권한',
+      run: runLedgerReset
+    }
+  ];
+
+  function resetDef(id) {
+    for (var i = 0; i < RESETS.length; i++) if (RESETS[i].id === id) return RESETS[i];
+    return null;
+  }
+
+  function resetCardHtml(def) {
+    var st = resetState.msg[def.id] || null;
+    var busy = resetState.busy === def.id;
+    var h = '<div class="reset-card ' + def.cls + '">' +
+      '<div class="reset-head"><span class="re-emoji" aria-hidden="true">' + def.emoji + '</span><b>' + esc(def.title) + '</b></div>' +
+      '<ul class="reset-lines">';
+    for (var i = 0; i < def.lines.length; i++) {
+      var l = def.lines[i];
+      h += '<li' + (l.keep ? ' class="keep"' : '') + '><b>' + esc(l.label) + '</b> ' + esc(l.text) + '</li>';
+    }
+    h += '</ul>' +
+      '<button class="reset-btn" type="button" data-act="reset-run" data-id="' + esc(def.id) + '"' + (resetState.busy ? ' disabled' : '') + '>' +
+        (busy ? '⏳ 초기화하는 중…' : '🧹 ' + esc(def.btn)) + '</button>' +
+      '<p class="reset-msg' + (st && !st.ok ? ' err' : '') + '">' + esc(st ? st.text : '') + '</p>' +
+      '</div>';
+    return h;
+  }
+
+  function renderReset() {
+    var body = document.getElementById('resetBody');
+    if (!body) return;
+    var h = '<p class="reset-note">실제 가족이 쓰기 전에 <b>테스트로 남긴 기록만</b> 대시보드별로 지워요. '
+      + '계정(<b>config/users.json</b>)은 건드리지 않고, 지운 기록은 다른 기기에도 바로 반영돼요.</p>' +
+      '<div class="reset-list">';
+    for (var i = 0; i < RESETS.length; i++) h += resetCardHtml(RESETS[i]);
+    h += '</div>';
+    body.innerHTML = h;
+  }
+
+  function openReset() {
+    if (!isAdmin()) return;
+    closeAccounts();
+    resetState.busy = '';
+    resetState.msg = {};
+    renderReset();
+    var m = document.getElementById('resetModal');
+    if (!m) return;
+    m.hidden = false;
+    lockBodyScroll();
+  }
+  function closeReset() {
+    var m = document.getElementById('resetModal');
+    if (m) m.hidden = true;
+    unlockBodyScroll();
+  }
+
+  function askReset(id) {
+    if (!isAdmin() || resetState.busy) return;
+    var def = resetDef(id);
+    if (!def) return;
+    if (!window.confirm('🧹 ' + def.title + '\n\n' + def.confirm + '\n\n계정은 건드리지 않아요.\n지금 초기화할까요?')) return;
+    if (!window.confirm('마지막 확인이에요.\n지운 기록은 되돌릴 수 없어요.\n정말 초기화할까요?')) return;
+    runReset(def);
+  }
+
+  async function runReset(def) {
+    if (!isAdmin() || resetState.busy) return;
+    resetState.busy = def.id;
+    resetState.msg[def.id] = { ok: true, text: '' };
+    renderReset();
+    var list = [];
+    try {
+      list = await def.run();
+    } catch (e) {
+      list.push({ path: '', label: def.title, ok: false, error: (e && e.message) || '알 수 없는 오류' });
+    }
+    var failed = [], done = 0, skipped = 0, i;
+    for (i = 0; i < list.length; i++) {
+      if (!list[i].ok) failed.push(list[i]);
+      else if (list[i].skipped) skipped++;
+      else done++;
+    }
+    resetState.busy = '';
+    if (!failed.length) {
+      resetState.msg[def.id] = { ok: true, text: '✓ ' + def.doneText + (skipped ? ' (없던 파일 ' + skipped + '개는 건너뛰었어요)' : '') };
+      showToast('✓ ' + def.doneText);
+    } else {
+      var names = [];
+      for (i = 0; i < failed.length; i++) names.push(failed[i].label + (failed[i].error ? ' (' + failed[i].error + ')' : ''));
+      resetState.msg[def.id] = {
+        ok: false,
+        text: '⚠️ ' + (done ? done + '개는 지웠지만 ' : '') + failed.length + '개를 지우지 못했어요: ' + names.join(', ') + ' — 잠시 뒤 다시 시도해 주세요.'
+      };
+      showToast('일부 기록을 지우지 못했어요. 다시 시도해 주세요.');
+    }
+    renderReset();
+  }
+
   /* ============ 새 기기 연결 링크 (#connect=…) ============ */
   function b64urlEncodeUtf8(str) {
     return b64encodeUtf8(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -1461,6 +1810,9 @@
     if (act === 'logout') { doLogout(); return; }
     if (act === 'accounts-open') { openAccounts(); return; }
     if (act === 'accounts-close') { closeAccounts(); return; }
+    if (act === 'reset-open') { openReset(); return; }
+    if (act === 'reset-close') { closeReset(); return; }
+    if (act === 'reset-run') { askReset(el.getAttribute('data-id') || ''); return; }
     if (act === 'acct-pw') { acct.pwFor = el.getAttribute('data-id') || ''; acct.msg = ''; renderAccounts(); return; }
     if (act === 'acct-pw-cancel') { acct.pwFor = ''; renderAccounts(); return; }
     if (act === 'acct-del') { deleteAccount(el.getAttribute('data-id')); return; }
@@ -1474,12 +1826,16 @@
   document.addEventListener('click', function (e) {
     var a = document.getElementById('acctModal');
     if (a && !a.hidden && e.target === a) closeAccounts();
+    var r = document.getElementById('resetModal');
+    if (r && !r.hidden && e.target === r) closeReset();
   });
 
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' && e.key !== 'Esc') return;
     var a = document.getElementById('acctModal');
     if (a && !a.hidden) closeAccounts();
+    var r = document.getElementById('resetModal');
+    if (r && !r.hidden) closeReset();
   });
 
   document.addEventListener('change', function (e) {
