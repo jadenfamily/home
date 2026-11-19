@@ -307,6 +307,55 @@
   .reset-msg.err{ color:#c6415a; }
   .reset-msg:empty{ display:none; }
 
+  /* ---------- 백업 · 복구 (관리자 전용) ---------- */
+  .bak-note{ margin:0; font-size:11.5px; font-weight:800; color:#8a7f70; line-height:1.6; }
+  .bak-note b{ color:#6d6484; }
+  .bak-hero{
+    display:flex; flex-direction:column; gap:9px; padding:14px;
+    border-radius:20px; border:2px solid #d9e8fb;
+    background:linear-gradient(140deg,#eef7ff 0%,#fffdf9 64%);
+  }
+  .bak-hero-head{ display:flex; flex-direction:column; gap:3px; }
+  .bak-hero-head b{ font-size:14.5px; font-weight:900; letter-spacing:-.015em; }
+  .bak-hero-head span{ font-size:11.5px; font-weight:800; color:#8a7f70; line-height:1.5; }
+  .bak-btn{
+    min-height:46px; border:none; border-radius:14px; cursor:pointer; touch-action:manipulation;
+    background:linear-gradient(135deg,#7fc7ff,#7c5cfc); color:#fff; font-size:14px; font-weight:900;
+    box-shadow:0 8px 18px rgba(110,140,255,.26);
+  }
+  .bak-btn:active{ transform:translateY(1px); }
+  .bak-btn:disabled{ opacity:.55; box-shadow:none; cursor:default; }
+  .bak-msg{ margin:0; font-size:11.5px; font-weight:900; color:#0f7a55; line-height:1.55; white-space:pre-line; }
+  .bak-msg.err{ color:#c6415a; }
+  .bak-msg:empty{ display:none; }
+  .bak-sec{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; padding-top:2px; }
+  .bak-sec b{ font-size:13.5px; font-weight:900; letter-spacing:-.01em; }
+  .bak-sec span{ font-size:11px; font-weight:800; color:#a2937f; }
+  .bak-list{ display:flex; flex-direction:column; gap:8px; }
+  .bak-row{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:11px 12px;
+    border-radius:16px; border:2px solid #f1e6da; background:#fff;
+  }
+  .bak-row.today{ border-color:#ffd9a3; background:linear-gradient(135deg,#fff8ec 0%,#fff 70%); }
+  .bak-when{ display:flex; flex-direction:column; gap:2px; min-width:126px; flex:1 1 126px; }
+  .bak-when b{ font-size:13.5px; font-weight:900; letter-spacing:-.01em; }
+  .bak-when span{ font-size:11px; font-weight:800; color:#a2937f; line-height:1.45; }
+  .bak-btns{ display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
+  .bak-btns button{
+    min-height:40px; padding:0 12px; border-radius:12px; cursor:pointer; touch-action:manipulation;
+    border:2px solid #eadfd1; background:#fff; color:#6d6484; font-size:12.5px; font-weight:900;
+  }
+  .bak-btns button:active{ transform:translateY(1px); }
+  .bak-btns button:disabled{ opacity:.55; cursor:default; }
+  .bak-btns .bak-go{ border:none; background:linear-gradient(135deg,#cfe6ff,#dcd4ff); color:#3a3a8a; }
+  .bak-empty{
+    display:flex; flex-direction:column; align-items:center; gap:5px; text-align:center; padding:26px 18px;
+    border-radius:18px; border:2px dashed #eadfd1; background:#fffdf9;
+    font-size:13.5px; font-weight:900; color:#6d6484; line-height:1.55;
+  }
+  .bak-empty span{ font-size:11.5px; font-weight:800; color:#a2937f; }
+  .bak-empty b{ color:#6d6484; }
+
   /* ---------- 토스트 ---------- */
   .toast{
     position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom,0px)); transform:translate(-50%,14px);
@@ -319,6 +368,9 @@
 
   @media (max-width:560px){
     .acct-add{ grid-template-columns:1fr; }
+    .bak-when{ flex:1 1 100%; }
+    .bak-btns{ width:100%; margin-left:0; }
+    .bak-btns button{ flex:1 1 0; }
     .hist-body{ padding:12px 12px 16px; }
     .login-card{ padding:22px 18px 18px; border-radius:24px; }
   }
@@ -348,6 +400,7 @@
         <span class="uc-av" id="ucAv">·</span>
         <span class="uc-meta"><b id="ucName">-</b><span class="uc-role" id="ucRole">-</span></span>
       </div>
+      <button class="edit-btn" type="button" id="backupBtn" data-act="backup-open" aria-haspopup="dialog" hidden><span class="bi" aria-hidden="true">💾</span><span class="bl">백업</span></button>
       <button class="edit-btn" type="button" id="resetBtn" data-act="reset-open" aria-haspopup="dialog" hidden><span class="bi" aria-hidden="true">🧹</span><span class="bl">초기화</span></button>
       <button class="edit-btn" type="button" id="accountsBtn" data-act="accounts-open" aria-haspopup="dialog" hidden><span class="bi" aria-hidden="true">👥</span><span class="bl">계정</span></button>
       <button class="edit-btn out-btn" type="button" data-act="logout"><span class="bi" aria-hidden="true">⏻</span><span class="bl">로그아웃</span></button>
@@ -394,6 +447,16 @@
       <button class="hist-close" type="button" data-act="reset-close" aria-label="초기화 창 닫기">✕</button>
     </div>
     <div class="hist-body" id="resetBody"></div>
+  </div>
+</div>
+
+<div class="hist" id="backupModal" hidden role="dialog" aria-modal="true" aria-labelledby="backupTitle">
+  <div class="hist-card">
+    <div class="hist-head">
+      <h2 id="backupTitle">💾 백업 · 복구</h2>
+      <button class="hist-close" type="button" data-act="backup-close" aria-label="백업 창 닫기">✕</button>
+    </div>
+    <div class="hist-body" id="backupBody"></div>
   </div>
 </div>
 
@@ -754,9 +817,11 @@
   function applyPermissions() {
     var accBtn = document.getElementById('accountsBtn');
     if (accBtn) accBtn.hidden = !can('accounts');
-    /* 초기화는 관리자만 — 보호자도 볼 수 없어요 */
+    /* 초기화·백업은 관리자만 — 보호자도 볼 수 없어요 */
     var rBtn = document.getElementById('resetBtn');
     if (rBtn) rBtn.hidden = !isAdmin();
+    var bBtn = document.getElementById('backupBtn');
+    if (bBtn) bBtn.hidden = !isAdmin();
   }
 
   function enterPortal() {
@@ -770,6 +835,7 @@
     renderGreeting();
     renderHub();
     setSync(navigator.onLine === false ? 'offline' : 'ok');
+    maybeAutoBackup(); /* 관리자면 하루 한 번, 조용히 오늘 백업을 남겨요 */
   }
 
   /* ============ 로그인 화면 ============ */
@@ -780,6 +846,7 @@
     if (login) login.hidden = false;
     closeAccounts(); /* 계정 팝업이 열려 있었다면 닫고 배경 스크롤 잠금도 푼다 */
     closeReset(); /* 초기화 팝업도 마찬가지 */
+    closeBackup(); /* 백업 팝업도 마찬가지 */
     renderLoginBody(mode || (cloud.conn ? 'login' : 'setup'));
     renderSyncPill();
   }
@@ -960,6 +1027,7 @@
     cloud.me = null;
     closeAccounts();
     closeReset();
+    closeBackup();
     if (!silent) showToast('로그아웃했어요.');
     showLogin('login');
   }
@@ -1399,6 +1467,35 @@
       cfg.updatedAt = iso;
       await resetWrite(out, 'config/settings.json', cfg, '펫·누적 기록', '테스트 초기화: 펫 성장·누적 기록');
     }
+
+    /* 4) 계정별 프로필 — 코인·펫 성장·상점에서 산 아이템·방 꾸미기 (프로필이 있을 때만) */
+    var profDir = await ghGet('config/profiles');
+    if (!profDir.ok) {
+      out.push({ path: 'config/profiles', label: '계정별 프로필', ok: false, error: profDir.error || ('HTTP ' + (profDir.status || 0)) });
+    } else if (!profDir.missing) {
+      var pItems = asArr(profDir.list);
+      for (var pi = 0; pi < pItems.length; pi++) {
+        var pit = pItems[pi] || {};
+        if (pit.type !== 'file' || !/\.json$/i.test(String(pit.path || ''))) continue;
+        var pf = await resetRead(out, pit.path, '계정별 프로필');
+        if (!pf) continue;
+        var petP = asObj(pf.pet);
+        petP.stage = 0;
+        petP.exp = 0;
+        petP.hatchedAt = 0;
+        petP.collection = [];
+        pf.pet = petP; /* 알 종류·펫 그림은 남겨요 */
+        pf.coins = 0;
+        pf.owned = {}; /* 산 가구·벽지·옷 (기본 아이템은 아이 대시보드가 다시 채워요) */
+        pf.room = {};
+        pf.avatar = {};
+        pf.bag = {};
+        pf.award = { day: '', checks: {}, groups: {}, stickers: 0 };
+        pf.clearedAt = now;
+        pf.updatedAt = iso;
+        await resetWrite(out, pit.path, pf, '계정별 프로필', '테스트 초기화: 계정별 프로필');
+      }
+    }
     return out;
   }
 
@@ -1492,9 +1589,10 @@
       lines: [
         { label: '지워요', text: '오늘 체크·완료율, 칭찬 스티커 적립·사용, 스티커 보드 기록' },
         { label: '지워요', text: '펫 성장(경험치·도장·도감)과 누적 스티커 수' },
+        { label: '지워요', text: '계정별 코인·펫 성장·상점에서 산 아이템·방 꾸미기 (config/profiles)' },
         { label: '남겨요', keep: true, text: '하루 루틴, 시간표, 교재 목록, 스티커 칸 수·목표·보상 이유, 펫 그림' }
       ],
-      confirm: '지워요\n· 오늘 체크와 완료율\n· 칭찬 스티커 적립·사용 기록과 보드 기록\n· 펫 경험치·도장·도감, 누적 스티커 수\n\n남겨요\n· 하루 루틴·시간표·교재\n· 스티커 칸 수·목표·보상 이유\n· 펫 이름·그림',
+      confirm: '지워요\n· 오늘 체크와 완료율\n· 칭찬 스티커 적립·사용 기록과 보드 기록\n· 펫 경험치·도장·도감, 누적 스티커 수\n· 계정별 코인·펫 성장·산 아이템·방 꾸미기\n\n남겨요\n· 하루 루틴·시간표·교재\n· 스티커 칸 수·목표·보상 이유\n· 펫 이름·그림',
       run: runKidsReset
     },
     {
@@ -1611,6 +1709,498 @@
       showToast('일부 기록을 지우지 못했어요. 다시 시도해 주세요.');
     }
     renderReset();
+  }
+
+  /* ============ 백업 · 복구 (관리자 전용) ============ */
+  /* 가족 기록 전체를 저장소의 backups/YYYY-MM-DD.json 에 하루 한 번 남기고,
+     7일이 지난 백업은 새 백업을 만들 때 자동으로 지운다. */
+  var BACKUP_DIR = 'backups';
+  var BACKUP_KEEP_DAYS = 7;
+  var BACKUP_ROOTS = ['config/', 'data/', 'fridge/', 'ledger/'];
+  var AUTO_BACKUP_KEY = 'kidsDashboard.backup.auto.v1';
+
+  var bak = { busy: false, msg: null, list: null, listErr: '', loading: false, meta: {}, todayExists: false };
+
+  function bakDateKey(name) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})\.json$/.exec(String(name || ''));
+    return m ? (m[1] + '-' + m[2] + '-' + m[3]) : '';
+  }
+  function bakDayOf(key) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''));
+    if (!m) return null;
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (isNaN(d.getTime())) return null;
+    if (d.getFullYear() !== Number(m[1]) || d.getMonth() !== Number(m[2]) - 1 || d.getDate() !== Number(m[3])) return null;
+    return d;
+  }
+  function bakNiceDate(key) {
+    var d = bakDayOf(key);
+    if (!d) return String(key || '');
+    return (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + DAY_NAMES[d.getDay()] + ')';
+  }
+  function bakAgeDays(key) {
+    var d = bakDayOf(key);
+    var t = bakDayOf(todayKey());
+    if (!d || !t) return -1;
+    return Math.round((t.getTime() - d.getTime()) / 86400000);
+  }
+  function bakSizeText(n) {
+    n = Number(n) || 0;
+    if (n >= 1048576) return (Math.round(n / 1048576 * 10) / 10) + 'MB';
+    if (n >= 1024) return Math.round(n / 1024) + 'KB';
+    return n + 'B';
+  }
+  /* 백업에 담을 파일: config/·data/·fridge/·ledger/ 의 json (backups/ 자신은 제외) */
+  function isBackupTarget(path) {
+    var p = String(path || '');
+    if (!p || p.indexOf(BACKUP_DIR + '/') === 0) return false;
+    if (!/\.json$/i.test(p)) return false;
+    for (var i = 0; i < BACKUP_ROOTS.length; i++) if (p.indexOf(BACKUP_ROOTS[i]) === 0) return true;
+    return false;
+  }
+
+  function ghTree(branch) {
+    var url = ghBase() + '/git/trees/' + encodeURIComponent(branch || (cloud.conn && cloud.conn.branch) || 'main') + '?recursive=1&_=' + Date.now();
+    return window.fetch(url, { headers: ghHeaders(), cache: 'no-store' }).then(function (res) {
+      if (!res.ok) return { ok: false, status: res.status };
+      return res.json().then(function (j) {
+        var out = [];
+        var tree = asArr(j && j.tree);
+        for (var i = 0; i < tree.length; i++) {
+          var t = tree[i] || {};
+          if (t.type !== 'blob' || !t.path || !t.sha) continue;
+          if (isBackupTarget(t.path)) out.push({ path: t.path, sha: t.sha });
+        }
+        return { ok: true, files: out, truncated: !!(j && j.truncated) };
+      });
+    }).catch(function () { return { ok: false, status: 0 }; });
+  }
+
+  async function listTreeFallback(prefix, out, depth) {
+    if (depth > 4) return;
+    var res = await ghGet(prefix);
+    if (!res.ok || res.missing) return;
+    var items = asArr(res.list);
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i] || {};
+      if (it.type === 'file' && isBackupTarget(it.path)) out.push({ path: it.path, sha: it.sha || '' });
+      else if (it.type === 'dir' && String(it.path || '').indexOf(BACKUP_DIR + '/') !== 0) await listTreeFallback(it.path, out, depth + 1);
+    }
+  }
+
+  async function ghBlobText(sha) {
+    try {
+      var h = ghHeaders();
+      h['Accept'] = 'application/vnd.github.raw';
+      var res = await window.fetch(ghBase() + '/git/blobs/' + encodeURIComponent(sha), { headers: h, cache: 'no-store' });
+      if (!res.ok) return { ok: false, status: res.status };
+      return { ok: true, text: await res.text() };
+    } catch (e) {
+      return { ok: false, status: 0 };
+    }
+  }
+
+  async function ghDelete(path, sha, message) {
+    try {
+      var res = await window.fetch(ghBase() + '/contents/' + path, {
+        method: 'DELETE',
+        headers: ghHeaders(),
+        body: JSON.stringify({ message: message || ('삭제: ' + path), sha: sha, branch: (cloud.conn && cloud.conn.branch) || 'main' })
+      });
+      if (res.ok) {
+        delete cloud.sha[path];
+        lsSet(SHA_KEY, JSON.stringify(cloud.sha || {}));
+        return { ok: true };
+      }
+      if (res.status === 401) return { ok: false, status: 401, error: '토큰이 올바르지 않아요' };
+      if (res.status === 403) return { ok: false, status: 403, error: '권한이 없어요' };
+      return { ok: false, status: res.status, error: 'HTTP ' + res.status };
+    } catch (e) {
+      return { ok: false, status: 0, error: '네트워크에 연결하지 못했어요' };
+    }
+  }
+
+  async function mapLimit(items, limit, fn) {
+    var out = new Array(items.length);
+    var next = 0;
+    async function worker() {
+      while (next < items.length) {
+        var i = next++;
+        out[i] = await fn(items[i], i);
+      }
+    }
+    var ws = [];
+    var n = Math.min(limit, items.length);
+    for (var k = 0; k < n; k++) ws.push(worker());
+    await Promise.all(ws);
+    return out;
+  }
+
+  /* 저장소에 지금 있는 백업 대상 파일 목록 (Trees API → 실패하면 폴더별로) */
+  async function bakCollect() {
+    var tree = await ghTree();
+    var list = [];
+    if (tree.ok && tree.files.length && !tree.truncated) {
+      list = tree.files;
+    } else {
+      for (var i = 0; i < BACKUP_ROOTS.length; i++) {
+        await listTreeFallback(BACKUP_ROOTS[i].replace(/\/$/, ''), list, 0);
+      }
+    }
+    var seen = {}, out = [];
+    for (var j = 0; j < list.length; j++) {
+      var f = list[j] || {};
+      if (!f.path || seen[f.path]) continue;
+      seen[f.path] = 1;
+      out.push({ path: f.path, sha: f.sha || '' });
+    }
+    out.sort(function (a, b) { return a.path < b.path ? -1 : (a.path > b.path ? 1 : 0); });
+    return out;
+  }
+
+  /* 7일이 지난 백업 파일을 지워요 (오늘 것과 7일 이내는 그대로) */
+  async function pruneBackups(todayStr) {
+    var res = await ghGet(BACKUP_DIR);
+    if (!res.ok) return { ok: false, error: res.error || ('HTTP ' + (res.status || 0)), deleted: [], failed: [] };
+    if (res.missing) return { ok: true, deleted: [], failed: [] };
+    var items = asArr(res.list);
+    var today = todayStr || todayKey();
+    var deleted = [], failed = [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i] || {};
+      if (it.type !== 'file') continue;
+      var key = bakDateKey(it.name || it.path);
+      if (!key || key === today) continue;
+      var age = bakAgeDays(key);
+      if (age <= BACKUP_KEEP_DAYS) continue; /* 7일 이내는 그대로 */
+      var del = await ghDelete(BACKUP_DIR + '/' + key + '.json', it.sha, '오래된 백업 자동 삭제: ' + key);
+      if (del.ok) deleted.push(key);
+      else failed.push({ date: key, error: del.error || '' });
+    }
+    return { ok: true, deleted: deleted, failed: failed };
+  }
+
+  function bakPruneText(pruned) {
+    if (!pruned) return '';
+    var bits = [];
+    if (pruned.deleted && pruned.deleted.length) {
+      bits.push('7일이 지난 백업 ' + pruned.deleted.length + '개(' + pruned.deleted.join(', ') + ')를 지웠어요');
+    }
+    if (pruned.failed && pruned.failed.length) bits.push('오래된 백업 ' + pruned.failed.length + '개는 지우지 못했어요');
+    if (!pruned.ok && pruned.error) bits.push('오래된 백업 정리 실패: ' + pruned.error);
+    return bits.join(' · ');
+  }
+
+  /* 오늘 백업 만들기(있으면 덮어쓰기) + 오래된 백업 정리 */
+  async function createBackup(auto) {
+    var date = todayKey();
+    var path = BACKUP_DIR + '/' + date + '.json';
+    var list = await bakCollect();
+    if (!list.length) return { ok: false, error: '백업할 파일을 찾지 못했어요' };
+
+    var got = await mapLimit(list, 6, async function (f) {
+      if (f.sha) {
+        var r = await ghBlobText(f.sha);
+        if (r.ok) {
+          try { return { path: f.path, data: JSON.parse(r.text) }; } catch (e) { /* 아래에서 한 번 더 */ }
+        }
+      }
+      var alt = await ghGet(f.path);
+      if (alt.ok && !alt.missing) return { path: f.path, data: alt.data };
+      return { path: f.path, bad: true };
+    });
+
+    var files = {}, okCount = 0, badCount = 0;
+    for (var i = 0; i < got.length; i++) {
+      var g = got[i] || {};
+      if (!g.bad) { files[g.path] = g.data; okCount++; }
+      else badCount++;
+    }
+    if (!okCount) return { ok: false, error: '파일 내용을 읽지 못했어요' };
+
+    await ghGet(path); /* 오늘 백업이 이미 있으면 그 sha로 덮어써요 */
+    var snap = { version: 1, date: date, createdAt: new Date().toISOString(), by: (cloud.me && cloud.me.id) || '', files: files };
+    var put = await ghPut(path, snap, (auto ? '자동 백업: ' : '백업: ') + date + ' (' + okCount + '개 파일)');
+    if (!put.ok) return { ok: false, error: put.error || '저장하지 못했어요', status: put.status || 0 };
+
+    var pruned = await pruneBackups(date);
+    if (bak.meta) delete bak.meta[date];
+    bak.todayExists = true;
+    return { ok: true, date: date, count: okCount, bad: badCount, pruned: pruned };
+  }
+
+  /* ---------- 화면 ---------- */
+  function bakRowsHtml() {
+    if (bak.loading && !(bak.list && bak.list.length)) return '<div class="bak-empty">⏳ 백업 목록을 불러오는 중…</div>';
+    if (bak.listErr) return '<div class="bak-empty">⚠️ 백업 목록을 불러오지 못했어요.<span>' + esc(bak.listErr) + '</span></div>';
+    var list = bak.list || [];
+    var today = todayKey();
+    var h = '';
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i] || {};
+      var key = bakDateKey(it.name || it.path);
+      if (!key) continue;
+      var age = bakAgeDays(key);
+      var meta = bak.meta[key] || null;
+      var bits = [];
+      if (age === 0) bits.push('오늘');
+      else if (age === 1) bits.push('어제');
+      else if (age > 1) bits.push(age + '일 전');
+      if (meta && meta.count != null) bits.push('파일 ' + meta.count + '개');
+      if (it.size) bits.push(bakSizeText(it.size));
+      h += '<div class="bak-row' + (key === today ? ' today' : '') + '">' +
+        '<div class="bak-when"><b>' + esc(bakNiceDate(key)) + '</b><span>' + esc(bits.join(' · ')) + '</span></div>' +
+        '<div class="bak-btns">' +
+          '<button type="button" class="bak-go" data-act="backup-restore" data-date="' + esc(key) + '"' + (bak.busy ? ' disabled' : '') + '>이 날짜로 복구</button>' +
+          '<button type="button" data-act="backup-download" data-date="' + esc(key) + '">파일 저장</button>' +
+        '</div></div>';
+    }
+    if (!h) {
+      return '<div class="bak-empty">아직 백업이 없어요.<span>위의 <b>지금 백업 만들기</b>를 누르면 오늘 기록이 저장돼요.</span></div>';
+    }
+    return h;
+  }
+
+  function renderBackup() {
+    var body = document.getElementById('backupBody');
+    if (!body) return;
+    var st = bak.msg || { ok: true, text: '' };
+    var listN = (bak.list && bak.list.length) || 0;
+    var h = '<p class="bak-note">가족 기록 전체(<b>config·data·fridge·ledger</b>)를 하루 한 번 <b>backups/날짜.json</b>으로 남겨요. '
+      + '<b>7일</b>이 지난 백업은 새 백업을 만들 때 자동으로 지워져요.</p>'
+      + '<div class="bak-hero">'
+      + '<div class="bak-hero-head"><b>💾 지금 백업 만들기</b><span>'
+      + (bak.todayExists ? '오늘 백업이 이미 있어요. 다시 만들면 오늘 것으로 덮어써요.' : '오늘 백업이 아직 없어요. 열어 둔 동안 자동으로 한 번 만들어져요.')
+      + '</span></div>'
+      + '<button class="bak-btn" type="button" data-act="backup-run"' + (bak.busy ? ' disabled' : '') + '>'
+      + (bak.busy ? '⏳ 처리하는 중…' : '💾 지금 백업 만들기') + '</button>'
+      + '<p class="bak-msg' + (st.ok ? '' : ' err') + '">' + esc(st.text || '') + '</p>'
+      + '</div>'
+      + '<div class="bak-sec"><b>백업 날짜 (최근 7일)</b><span>' + (listN ? listN + '개' : '') + '</span></div>'
+      + '<div class="bak-list">' + bakRowsHtml() + '</div>';
+    body.innerHTML = h;
+  }
+
+  async function loadBackupMeta(force) {
+    var list = bak.list || [];
+    var need = [];
+    for (var i = 0; i < list.length; i++) {
+      var key = bakDateKey((list[i] || {}).name);
+      if (!key) continue;
+      if (!force && bak.meta[key]) continue;
+      need.push(key);
+    }
+    if (!need.length) return;
+    await mapLimit(need, 3, async function (key) {
+      var res = await ghGet(BACKUP_DIR + '/' + key + '.json');
+      if (!res.ok || res.missing) { bak.meta[key] = { count: null }; return; }
+      var d = asObj(res.data);
+      var files = asObj(d.files);
+      var n = 0;
+      for (var p in files) if (Object.prototype.hasOwnProperty.call(files, p)) n++;
+      bak.meta[key] = { count: n };
+    });
+    renderBackup();
+  }
+
+  async function loadBackupList(force) {
+    if (!isAdmin()) return;
+    if (bak.loading) return;
+    bak.loading = true;
+    bak.listErr = '';
+    renderBackup();
+    var res = await ghGet(BACKUP_DIR);
+    bak.loading = false;
+    if (!res.ok) {
+      bak.listErr = res.error || ('HTTP ' + (res.status || 0));
+      bak.list = [];
+    } else if (res.missing) {
+      bak.list = [];
+      bak.todayExists = false;
+    } else {
+      var items = asArr(res.list);
+      var list = [];
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i] || {};
+        if (it.type !== 'file') continue;
+        if (!bakDateKey(it.name || it.path)) continue;
+        list.push(it);
+      }
+      list.sort(function (a, b) { return (a.name < b.name) ? 1 : (a.name > b.name ? -1 : 0); });
+      bak.list = list;
+      bak.todayExists = false;
+      for (var j = 0; j < list.length; j++) if (bakDateKey(list[j].name) === todayKey()) bak.todayExists = true;
+    }
+    renderBackup();
+    loadBackupMeta(!!force);
+  }
+
+  function openBackup() {
+    if (!isAdmin()) return;
+    closeAccounts();
+    closeReset();
+    bak.msg = { ok: true, text: '' };
+    renderBackup();
+    var m = document.getElementById('backupModal');
+    if (!m) return;
+    m.hidden = false;
+    lockBodyScroll();
+    loadBackupList(true);
+  }
+  function closeBackup() {
+    var m = document.getElementById('backupModal');
+    if (m) m.hidden = true;
+    unlockBodyScroll();
+  }
+
+  async function runBackupNow() {
+    if (!isAdmin() || bak.busy) return;
+    bak.busy = true;
+    bak.msg = { ok: true, text: '⏳ 지금 기록을 백업하는 중이에요…' };
+    renderBackup();
+    var r = null;
+    try { r = await createBackup(false); } catch (e) { r = { ok: false, error: (e && e.message) || '알 수 없는 오류' }; }
+    bak.busy = false;
+    if (r && r.ok) {
+      var t = '✓ ' + bakNiceDate(r.date) + ' 백업을 만들었어요 · 파일 ' + r.count + '개'
+        + (r.bad ? ' (' + r.bad + '개는 읽지 못해 뺐어요)' : '');
+      var pt = bakPruneText(r.pruned);
+      if (pt) t += '\n' + pt;
+      bak.msg = { ok: true, text: t };
+      showToast('✓ 오늘 백업을 만들었어요 (파일 ' + r.count + '개)');
+      await loadBackupList(true);
+    } else {
+      bak.msg = { ok: false, text: '⚠️ 백업을 만들지 못했어요: ' + ((r && r.error) || '알 수 없는 오류') + ' — 잠시 뒤 다시 시도해 주세요.' };
+      showToast('백업을 만들지 못했어요. 다시 시도해 주세요.');
+    }
+    renderBackup();
+  }
+
+  async function downloadBackup(key) {
+    if (!isAdmin() || !bakDayOf(key)) return;
+    var res = await ghGet(BACKUP_DIR + '/' + key + '.json');
+    if (!res.ok || res.missing) { showToast('백업 파일을 내려받지 못했어요.'); return; }
+    var text = res.raw || JSON.stringify(res.data, null, 2);
+    var blob = new window.Blob([text], { type: 'application/json' });
+    var url = window.URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'jadenfamily-backup-' + key + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.setTimeout(function () { window.URL.revokeObjectURL(url); }, 4000);
+    showToast('백업 파일을 저장했어요: ' + key + '.json');
+  }
+
+  /* 복구 뒤에는 계정 파일이 그때 상태로 돌아왔을 수 있어서 내 권한을 다시 맞춰요 */
+  async function syncAfterRestore() {
+    var res = await ghGet('config/users.json');
+    if (!res.ok || !res.data || Object.prototype.toString.call(res.data.users) !== '[object Array]') return;
+    cloud.users = res.data;
+    saveUsersCache(res.data);
+    var u = findUserById(cloud.me && cloud.me.id);
+    if (!u) {
+      showToast('복구한 백업에 내 계정이 없어 로그아웃했어요.');
+      doLogout(true);
+      return;
+    }
+    if (cloud.me) {
+      cloud.me.role = ROLES[u.role] ? u.role : 'viewer';
+      cloud.me.name = u.name || u.id;
+      cloud.me.dashboards = dashboardsFor(u);
+      saveSession(cloud.me, !!(cloud.session && cloud.session.store === 'local'), cloud.session);
+    }
+    applyUserUi();
+    applyPermissions();
+    renderGreeting();
+    renderHub();
+  }
+
+  async function restoreBackup(key) {
+    if (!isAdmin() || bak.busy) return;
+    if (!bakDayOf(key)) return;
+    var meta = bak.meta[key] || null;
+    var nTxt = (meta && meta.count != null) ? '파일 ' + meta.count + '개를 ' : '파일을 ';
+    if (!window.confirm('💾 ' + bakNiceDate(key) + ' 백업으로 복구할까요?\n\n'
+        + nTxt + '그날 상태로 되돌려요.\n지금 있는 기록은 그때 상태로 덮어써져요.\n계정(config/users.json)도 그날 상태로 돌아가요.')) return;
+    if (!window.confirm('마지막 확인이에요.\n' + bakNiceDate(key) + ' 이후에 저장한 기록은 사라져요.\n정말 복구할까요?')) return;
+
+    bak.busy = true;
+    bak.msg = { ok: true, text: '⏳ 백업 파일을 읽는 중이에요…' };
+    renderBackup();
+    var res = await ghGet(BACKUP_DIR + '/' + key + '.json');
+    if (!res.ok || res.missing || !res.data) {
+      bak.busy = false;
+      bak.msg = { ok: false, text: '⚠️ 그 백업 파일을 읽지 못했어요. 목록을 새로 고친 뒤 다시 시도해 주세요.' };
+      renderBackup();
+      return;
+    }
+    var files = asObj(res.data.files);
+    var paths = [];
+    for (var p in files) {
+      if (!Object.prototype.hasOwnProperty.call(files, p)) continue;
+      if (!isBackupTarget(p) || !isPlainObj(files[p])) continue; /* backups/ 같은 곳에는 절대 쓰지 않아요 */
+      paths.push(p);
+    }
+    if (!paths.length) {
+      bak.busy = false;
+      bak.msg = { ok: false, text: '⚠️ 이 백업에는 되돌릴 파일이 없어요.' };
+      renderBackup();
+      return;
+    }
+    paths.sort();
+    var done = 0, failed = [];
+    for (var i = 0; i < paths.length; i++) {
+      var one = paths[i];
+      bak.msg = { ok: true, text: '⏳ 복구하는 중… ' + (i + 1) + '/' + paths.length + ' · ' + one };
+      renderBackup();
+      var cur = await ghGet(one); /* 최신 sha를 먼저 확인해요 */
+      if (!cur.ok) { failed.push(one + ' (' + (cur.error || '') + ')'); continue; }
+      var put = await ghPut(one, files[one], '복구: ' + key + ' — ' + one);
+      if (put.ok) done++;
+      else failed.push(one + ' (' + (put.error || '') + ')');
+    }
+    bak.busy = false;
+    if (!failed.length) {
+      bak.msg = { ok: true, text: '✓ ' + bakNiceDate(key) + ' 백업으로 복구했어요 · 파일 ' + done + '개' };
+      showToast('✓ ' + bakNiceDate(key) + ' 백업으로 복구했어요');
+    } else {
+      bak.msg = {
+        ok: false,
+        text: '⚠️ ' + (done ? done + '개는 되돌렸지만 ' : '') + failed.length + '개를 되돌리지 못했어요: '
+          + failed.slice(0, 3).join(', ') + (failed.length > 3 ? ' 외 ' + (failed.length - 3) + '개' : '')
+      };
+      showToast('일부 파일을 되돌리지 못했어요.');
+    }
+    await syncAfterRestore();
+    bak.list = null;
+    await loadBackupList(true);
+  }
+
+  /* 관리자가 들어오면 하루 한 번만, 화면을 막지 않고 조용히 백업해요 */
+  function maybeAutoBackup() {
+    if (!isAdmin() || !cloud.conn) return;
+    var today = todayKey();
+    if (ssGet(AUTO_BACKUP_KEY) === today) return;
+    ssSet(AUTO_BACKUP_KEY, today);
+    window.setTimeout(async function () {
+      try {
+        var res = await ghGet(BACKUP_DIR + '/' + today + '.json');
+        if (res.ok && !res.missing) {
+          bak.todayExists = true;
+          var m0 = document.getElementById('backupModal');
+          if (m0 && !m0.hidden) renderBackup();
+          return;
+        }
+        var r = await createBackup(true);
+        if (!r || !r.ok) { ssDel(AUTO_BACKUP_KEY); return; }
+        var m = document.getElementById('backupModal');
+        if (m && !m.hidden) loadBackupList(true);
+      } catch (e) {
+        ssDel(AUTO_BACKUP_KEY);
+      }
+    }, 900);
   }
 
   /* ============ 새 기기 연결 링크 (#connect=…) ============ */
@@ -1813,6 +2403,11 @@
     if (act === 'reset-open') { openReset(); return; }
     if (act === 'reset-close') { closeReset(); return; }
     if (act === 'reset-run') { askReset(el.getAttribute('data-id') || ''); return; }
+    if (act === 'backup-open') { openBackup(); return; }
+    if (act === 'backup-close') { closeBackup(); return; }
+    if (act === 'backup-run') { runBackupNow(); return; }
+    if (act === 'backup-restore') { restoreBackup(String(el.getAttribute('data-date') || '')); return; }
+    if (act === 'backup-download') { downloadBackup(String(el.getAttribute('data-date') || '')); return; }
     if (act === 'acct-pw') { acct.pwFor = el.getAttribute('data-id') || ''; acct.msg = ''; renderAccounts(); return; }
     if (act === 'acct-pw-cancel') { acct.pwFor = ''; renderAccounts(); return; }
     if (act === 'acct-del') { deleteAccount(el.getAttribute('data-id')); return; }
@@ -1828,6 +2423,8 @@
     if (a && !a.hidden && e.target === a) closeAccounts();
     var r = document.getElementById('resetModal');
     if (r && !r.hidden && e.target === r) closeReset();
+    var b = document.getElementById('backupModal');
+    if (b && !b.hidden && e.target === b) closeBackup();
   });
 
   document.addEventListener('keydown', function (e) {
@@ -1836,6 +2433,8 @@
     if (a && !a.hidden) closeAccounts();
     var r = document.getElementById('resetModal');
     if (r && !r.hidden) closeReset();
+    var b = document.getElementById('backupModal');
+    if (b && !b.hidden) closeBackup();
   });
 
   document.addEventListener('change', function (e) {
