@@ -1976,7 +1976,7 @@
       + (bak.busy ? '⏳ 처리하는 중…' : '💾 지금 백업 만들기') + '</button>'
       + '<p class="bak-msg' + (st.ok ? '' : ' err') + '">' + esc(st.text || '') + '</p>'
       + '</div>'
-      + '<div class="bak-sec"><b>백업 날짜 (최근 7일)</b><span>' + (listN ? listN + '개' : '') + '</span></div>'
+      + '<div class="bak-sec"><b>백업 날짜 (최근 일주일)</b><span>' + (listN ? listN + '개' : '') + '</span></div>'
       + '<div class="bak-list">' + bakRowsHtml() + '</div>';
     body.innerHTML = h;
   }
