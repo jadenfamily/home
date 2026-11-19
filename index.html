@@ -266,6 +266,15 @@
   .acct-linkbox p{ margin:0; font-size:11.5px; font-weight:800; color:#b0610b; line-height:1.5; }
   .acct-linkbox input{ width:100%; min-height:42px; padding:8px 11px; border-radius:11px; border:2px solid #e6dccf; background:#fff; color:#4b3f7a; font-size:12px; font-weight:700; }
   .acct-role-note{ font-size:11.5px; font-weight:700; color:#8a93a8; line-height:1.6; }
+  .acct-dash{ display:flex; flex:1 1 100%; align-items:center; gap:6px; flex-wrap:wrap; padding-top:8px; margin-top:1px; border-top:1px dashed #f2e8dc; }
+  .acct-dash-label{ flex:0 0 auto; font-size:11px; font-weight:900; color:#8a93a8; }
+  .dash-chk{ display:inline-flex; align-items:center; gap:5px; min-height:34px; padding:0 10px; border-radius:11px; border:2px solid #e6dccf; background:#fffdf9; font-size:12px; font-weight:900; color:#6d6484; cursor:pointer; }
+  .dash-chk input{ width:15px; height:15px; margin:0; accent-color:#f0a02a; }
+  .dash-chk.on{ border-color:#ffd28a; background:#fff6e6; color:#a8620b; }
+  .dash-always{ display:inline-flex; align-items:center; min-height:34px; padding:0 11px; border-radius:11px; background:#eef8f3; color:#0a6b50; font-size:12px; font-weight:900; }
+  .acct-newdash{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding-top:6px; }
+  .hub-empty{ grid-column:1 / -1; display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; padding:34px 20px; border-radius:24px; border:2px dashed #eadfd1; background:#fffdf9; font-size:16px; font-weight:900; color:#6d6484; line-height:1.6; }
+  .hub-empty span{ font-size:12.5px; font-weight:800; color:#a2937f; }
 
   /* ---------- 토스트 ---------- */
   .toast{
@@ -381,6 +390,39 @@
     { id: 'ledger', emoji: '📒', title: '가계부', desc: '수입·고정비·변동지출과 예산을 한곳에', kind: 'link', cls: 'ledger', url: '../ledger-dashboard/' }
   ];
 
+  /* 계정별로 갈 수 있는 대시보드 (관리자는 언제나 전부) */
+  var DASH_IDS = ['kids', 'fridge', 'ledger'];
+  var DASH_DEFAULTS = {
+    admin: ['kids', 'fridge', 'ledger'],
+    parent: ['kids', 'fridge', 'ledger'],
+    viewer: ['kids', 'fridge', 'ledger'],
+    child: ['kids']
+  };
+  function dashboardsFor(u) {
+    if (!u) return [];
+    if (u.role === 'admin') return DASH_IDS.slice();
+    if (Object.prototype.toString.call(u.dashboards) === '[object Array]') {
+      var out = [];
+      for (var i = 0; i < u.dashboards.length; i++) {
+        var id = String(u.dashboards[i] == null ? '' : u.dashboards[i]);
+        if (DASH_IDS.indexOf(id) >= 0 && out.indexOf(id) < 0) out.push(id);
+      }
+      return out;
+    }
+    var def = DASH_DEFAULTS[u.role] || DASH_IDS;
+    return def.slice();
+  }
+  function dashAllowed(u, id) { return dashboardsFor(u).indexOf(id) >= 0; }
+  function dashTitle(id) {
+    for (var i = 0; i < DASHBOARDS.length; i++) if (DASHBOARDS[i].id === id) return DASHBOARDS[i].title;
+    return id;
+  }
+  function dashNames(ids) {
+    var out = [];
+    for (var i = 0; i < ids.length; i++) out.push(dashTitle(ids[i]));
+    return out.join(' · ');
+  }
+
   var cloud = { conn: null, users: null, me: null, session: null, status: 'idle', statusAt: 0, sha: {} };
   var acct = { pwFor: '', msg: '', busy: false, link: '' };
   var connectPrefill = null;
@@ -483,6 +525,7 @@
       id: String(j.id),
       name: String(j.name || j.id),
       role: ROLES[j.role] ? j.role : 'viewer',
+      dashboards: Object.prototype.toString.call(j.dashboards) === '[object Array]' ? j.dashboards : null,
       store: store,
       issuedAt: Number(j.issuedAt) || 0,
       expiresAt: exp
@@ -497,6 +540,7 @@
       id: me.id,
       name: me.name || me.id,
       role: ROLES[me.role] ? me.role : 'viewer',
+      dashboards: dashboardsFor(me),
       store: remember ? 'local' : 'session',
       issuedAt: (prev && prev.issuedAt) || now,
       expiresAt: remember ? (keepExp || (now + SESSION_MS)) : 0
@@ -630,9 +674,11 @@
     var grid = document.getElementById('hubGrid');
     if (!grid) return;
     var last = lsGet(HUB_LAST_KEY) || '';
+    var allowed = dashboardsFor(cloud.me);
     var html = '';
     for (var i = 0; i < DASHBOARDS.length; i++) {
       var d = DASHBOARDS[i];
+      if (allowed.indexOf(d.id) < 0) continue; /* 이 계정이 갈 수 있는 곳만 보여 줘요 */
       var badge = (d.kind !== 'soon' && last === d.id) ? '<span class="ht-badge">최근 사용</span>' : '';
       var body = '<span class="ht-emoji" aria-hidden="true">' + d.emoji + '</span>' +
         '<span class="ht-body"><span class="ht-title">' + esc(d.title) + '</span>' +
@@ -643,6 +689,9 @@
       } else {
         html += '<div class="hub-tile ' + d.cls + '">' + badge + body + '<span class="ht-go">준비 중 🚧</span></div>';
       }
+    }
+    if (!html) {
+      html = '<div class="hub-empty">🔒 열 수 있는 대시보드가 아직 없어요.<span>관리자에게 허용된 대시보드를 요청해 주세요.</span></div>';
     }
     grid.innerHTML = html;
   }
@@ -850,7 +899,7 @@
       if (!ok) { setSync(navigator.onLine === false ? 'offline' : 'ok'); return fail('아이디 또는 비밀번호가 맞지 않아요.'); }
       lsSet(LAST_ID_KEY, u.id);
       lsSet(LAST_REMEMBER_KEY, remember ? '1' : '0');
-      cloud.me = { id: u.id, name: u.name || u.id, role: ROLES[u.role] ? u.role : 'viewer' };
+      cloud.me = { id: u.id, name: u.name || u.id, role: ROLES[u.role] ? u.role : 'viewer', dashboards: dashboardsFor(u) };
       saveSession(cloud.me, remember, null);
       enterPortal();
     } catch (e) {
@@ -896,7 +945,7 @@
         return;
       }
     }
-    cloud.me = { id: u.id, name: u.name || u.id, role: ROLES[u.role] ? u.role : 'viewer' };
+    cloud.me = { id: u.id, name: u.name || u.id, role: ROLES[u.role] ? u.role : 'viewer', dashboards: dashboardsFor(u) };
     saveSession(cloud.me, sess.store === 'local', sess);
     enterPortal();
     verifySession();
@@ -919,12 +968,15 @@
     }
     var role = ROLES[u.role] ? u.role : 'viewer';
     var name = u.name || u.id;
-    if (role !== cloud.me.role || name !== cloud.me.name) {
-      cloud.me = { id: u.id, name: name, role: role };
+    var nextDash = dashboardsFor(u).join(',');
+    var nowDash = dashboardsFor(cloud.me).join(',');
+    if (role !== cloud.me.role || name !== cloud.me.name || nextDash !== nowDash) {
+      cloud.me = { id: u.id, name: name, role: role, dashboards: dashboardsFor(u) };
       saveSession(cloud.me, !!(cloud.session && cloud.session.store === 'local'), cloud.session);
       applyUserUi();
       applyPermissions();
       renderGreeting();
+      renderHub();
     }
     setSync('ok');
   }
@@ -980,6 +1032,38 @@
     for (var i = 0; i < users.length; i++) if (users[i].role === 'admin') n++;
     return n;
   }
+  function dashboardPickerHtml(u) {
+    if (u.role === 'admin') {
+      return '<div class="acct-dash"><span class="acct-dash-label">갈 수 있는 대시보드</span>' +
+        '<span class="dash-always">🔓 관리자는 모두</span></div>';
+    }
+    var allow = dashboardsFor(u);
+    var h = '<div class="acct-dash"><span class="acct-dash-label">갈 수 있는 대시보드</span>';
+    for (var i = 0; i < DASHBOARDS.length; i++) {
+      var d = DASHBOARDS[i];
+      var on = allow.indexOf(d.id) >= 0;
+      h += '<label class="dash-chk' + (on ? ' on' : '') + '">' +
+        '<input type="checkbox" data-act="acct-dash" data-id="' + esc(u.id) + '" data-dash="' + esc(d.id) + '"' + (on ? ' checked' : '') + '>' +
+        '<span>' + d.emoji + ' ' + esc(d.title) + '</span></label>';
+    }
+    h += '</div>';
+    return h;
+  }
+  function newAccountDashHtml(role) {
+    if (role === 'admin') {
+      return '<span class="acct-dash-label">갈 수 있는 대시보드</span><span class="dash-always">🔓 관리자는 모두</span>';
+    }
+    var allow = dashboardsFor({ role: role });
+    var h = '<span class="acct-dash-label">갈 수 있는 대시보드</span>';
+    for (var i = 0; i < DASHBOARDS.length; i++) {
+      var d = DASHBOARDS[i];
+      var on = allow.indexOf(d.id) >= 0;
+      h += '<label class="dash-chk' + (on ? ' on' : '') + '">' +
+        '<input type="checkbox" data-act="acct-new-dash" data-dash="' + esc(d.id) + '"' + (on ? ' checked' : '') + '>' +
+        '<span>' + d.emoji + ' ' + esc(d.title) + '</span></label>';
+    }
+    return h;
+  }
   function accountsHtml() {
     var users = (cloud.users && cloud.users.users) || [];
     var h = '<p class="acct-note">계정과 권한은 비공개 저장소의 <b>config/users.json</b>에 저장돼요. 비밀번호는 솔트가 붙은 SHA-256 해시로만 보관합니다.</p>';
@@ -998,6 +1082,7 @@
         '<select data-act="acct-role" data-id="' + esc(u.id) + '" aria-label="' + esc(u.id) + ' 권한">' + roleOptions(u.role) + '</select>' +
         '<button class="ghost-btn" type="button" data-act="acct-pw" data-id="' + esc(u.id) + '">비밀번호 변경</button>' +
         (self ? '' : '<button class="del-btn" type="button" data-act="acct-del" data-id="' + esc(u.id) + '">삭제</button>') +
+        dashboardPickerHtml(u) +
         (acct.pwFor === u.id ?
           '<form class="acct-pw" id="acctPwForm" data-id="' + esc(u.id) + '">' +
             '<input type="password" id="acctPwNew" placeholder="새 비밀번호 (4자 이상)" maxlength="64" autocomplete="new-password">' +
@@ -1007,12 +1092,13 @@
         '</div>';
     }
     h += '</div>';
-    h += '<div class="acct-role-note">관리자: 모든 기능 · 보호자: 루틴·스티커·편집·기록 · 아이: 루틴·스티커·기록 · 보기 전용: 화면과 기록만</div>';
+    h += '<div class="acct-role-note">관리자: 모든 기능 · 보호자: 루틴·스티커·편집·기록 · 아이: 루틴·스티커·기록 · 보기 전용: 화면과 기록만<br>계정마다 갈 수 있는 대시보드를 골라 둘 수 있어요. 관리자는 항상 세 곳 모두 열 수 있어요.</div>';
     h += '<form class="acct-add" id="acctAddForm" autocomplete="off">' +
       '<label>아이디<input id="acctNewId" maxlength="20" placeholder="예: jiwu" spellcheck="false"></label>' +
       '<label>이름<input id="acctNewName" maxlength="20" placeholder="예: 지우"></label>' +
-      '<label>권한<select id="acctNewRole">' + roleOptions('child') + '</select></label>' +
+      '<label>권한<select id="acctNewRole" data-act="acct-new-role">' + roleOptions('child') + '</select></label>' +
       '<label>비밀번호<input id="acctNewPw" type="password" maxlength="64" placeholder="4자 이상" autocomplete="new-password"></label>' +
+      '<div class="full acct-newdash" id="acctNewDash">' + newAccountDashHtml('child') + '</div>' +
       '<div class="full"><button class="lf-btn" type="submit">계정 추가</button></div>' +
       '</form>';
     h += '<p class="lf-msg" id="acctMsg">' + esc(acct.msg || '') + '</p>';
@@ -1033,6 +1119,19 @@
     return res;
   }
 
+  function newAccountDashIds() {
+    var out = [];
+    var boxes = document.querySelectorAll('#acctNewDash input[data-act="acct-new-dash"]');
+    for (var i = 0; i < boxes.length; i++) {
+      if (!boxes[i].checked) continue;
+      var id = boxes[i].getAttribute('data-dash');
+      if (DASH_IDS.indexOf(id) >= 0 && out.indexOf(id) < 0) out.push(id);
+    }
+    var ordered = [];
+    for (var k = 0; k < DASH_IDS.length; k++) if (out.indexOf(DASH_IDS[k]) >= 0) ordered.push(DASH_IDS[k]);
+    return ordered;
+  }
+
   async function addAccount() {
     if (!can('accounts') || !cloud.users) return;
     var id = fieldVal('acctNewId').trim().toLowerCase();
@@ -1042,19 +1141,51 @@
     if (!/^[a-z0-9_-]{2,20}$/.test(id)) return acctFail('아이디는 영문 소문자·숫자·_·- 로 2~20자로 정해 주세요.');
     if (pw.length < 4) return acctFail('비밀번호는 4자 이상으로 정해 주세요.');
     if (!ROLES[role]) role = 'child';
+    var dash = newAccountDashIds();
     var users = cloud.users.users;
     for (var i = 0; i < users.length; i++) if (String(users[i].id).toLowerCase() === id) return acctFail('이미 쓰고 있는 아이디예요.');
     acct.msg = '저장하는 중…';
     renderAccounts();
     var salt = randomHex(16);
     var u = { id: id, name: name || id, role: role, salt: salt, hash: await hashPassword(pw, salt), createdAt: new Date().toISOString() };
+    if (role !== 'admin') u.dashboards = dash;
     users.push(u);
     var res = await persistUsers('계정 추가: ' + id);
     if (!res.ok) {
       users.pop();
       return acctFail('저장하지 못했어요. (' + (res.error || '오프라인') + ')');
     }
-    acct.msg = id + ' 계정을 추가했어요.';
+    acct.msg = id + ' 계정을 추가했어요.' + (role === 'admin' ? '' : ' (갈 수 있는 곳: ' + (dash.length ? dashNames(dash) : '없음') + ')');
+    renderAccounts();
+  }
+
+  async function setDashboardAccess(id, dashId, on) {
+    if (!can('accounts') || !cloud.users) return;
+    if (DASH_IDS.indexOf(dashId) < 0) return;
+    var users = cloud.users.users;
+    var target = null;
+    for (var i = 0; i < users.length; i++) if (users[i].id === id) { target = users[i]; break; }
+    if (!target || target.role === 'admin') return;
+    var had = Object.prototype.toString.call(target.dashboards) === '[object Array]';
+    var oldArr = target.dashboards;
+    var cur = dashboardsFor(target);
+    var next = [];
+    for (var j = 0; j < cur.length; j++) if (cur[j] !== dashId) next.push(cur[j]);
+    if (on) next.push(dashId);
+    var ordered = [];
+    for (var k = 0; k < DASH_IDS.length; k++) if (next.indexOf(DASH_IDS[k]) >= 0) ordered.push(DASH_IDS[k]);
+    target.dashboards = ordered;
+    var res = await persistUsers('대시보드 권한: ' + id + ' → ' + (ordered.length ? ordered.join(',') : '없음'));
+    if (!res.ok) {
+      if (had) target.dashboards = oldArr; else delete target.dashboards;
+      return acctFail('대시보드 권한을 바꾸지 못했어요. (' + (res.error || '오프라인') + ')');
+    }
+    if (cloud.me && cloud.me.id === id) {
+      cloud.me.dashboards = dashboardsFor(target);
+      saveSession(cloud.me, !!(cloud.session && cloud.session.store === 'local'), cloud.session);
+      renderHub();
+    }
+    acct.msg = (target.name || id) + '님이 갈 수 있는 대시보드: ' + (ordered.length ? dashNames(ordered) : '없음');
     renderAccounts();
   }
 
@@ -1077,6 +1208,7 @@
     }
     if (cloud.me && cloud.me.id === id) {
       cloud.me.role = role;
+      cloud.me.dashboards = dashboardsFor(target);
       saveSession(cloud.me, !!(cloud.session && cloud.session.store === 'local'), cloud.session);
     }
     acct.msg = id + ' 권한을 ' + roleLabel(role) + '(으)로 바꿨어요.';
@@ -1084,6 +1216,7 @@
     applyUserUi();
     applyPermissions();
     renderGreeting();
+    renderHub();
   }
 
   async function deleteAccount(id) {
@@ -1352,7 +1485,17 @@
   document.addEventListener('change', function (e) {
     var el = e.target;
     if (!el || !el.getAttribute) return;
-    if (el.getAttribute('data-act') === 'acct-role') changeRole(el.getAttribute('data-id'), el.value);
+    var act = el.getAttribute('data-act');
+    if (act === 'acct-role') changeRole(el.getAttribute('data-id'), el.value);
+    if (act === 'acct-dash') {
+      var box = el.closest ? el.closest('.dash-chk') : null;
+      if (box) box.classList.toggle('on', !!el.checked);
+      setDashboardAccess(el.getAttribute('data-id'), el.getAttribute('data-dash'), !!el.checked);
+    }
+    if (act === 'acct-new-role') {
+      var wrap = document.getElementById('acctNewDash');
+      if (wrap) wrap.innerHTML = newAccountDashHtml(el.value);
+    }
   });
 
   document.addEventListener('submit', function (e) {
