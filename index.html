@@ -1753,7 +1753,7 @@
   /* 백업에 담을 파일: config/·data/·fridge/·ledger/ 의 json (backups/ 자신은 제외) */
   function isBackupTarget(path) {
     var p = String(path || '');
-    if (!p || p.indexOf(BACKUP_DIR + '/') === 0) return false;
+    if (!p || p.indexOf('backups/') >= 0) return false; /* 백업 폴더는 백업하지 않아요 */
     if (!/\.json$/i.test(p)) return false;
     for (var i = 0; i < BACKUP_ROOTS.length; i++) if (p.indexOf(BACKUP_ROOTS[i]) === 0) return true;
     return false;
