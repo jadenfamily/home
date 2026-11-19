@@ -684,7 +684,7 @@
     var portal = document.getElementById('portalRoot');
     if (portal) portal.hidden = true;
     if (login) login.hidden = false;
-    document.body.style.overflow = '';
+    closeAccounts(); /* 계정 팝업이 열려 있었다면 닫고 배경 스크롤 잠금도 푼다 */
     renderLoginBody(mode || (cloud.conn ? 'login' : 'setup'));
     renderSyncPill();
   }
@@ -1248,7 +1248,7 @@
     var portal = document.getElementById('portalRoot');
     if (portal) portal.hidden = true;
     if (login) login.hidden = false;
-    document.body.style.overflow = '';
+    closeAccounts(); /* 계정 팝업이 열려 있었다면 닫고 배경 스크롤 잠금도 푼다 */
     var body = document.getElementById('loginBody');
     if (body) {
       body.innerHTML = '<div class="lf">' +
