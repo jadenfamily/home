@@ -55,7 +55,7 @@
   /* ---------- 앱 뼈대 ---------- */
   .app{
     display:flex; flex-direction:column; height:100%;
-    max-width:980px; margin:0 auto; width:100%;
+    max-width:980px; margin:0 auto; width:100%; min-width:0; overflow-x:hidden;
     padding:0 env(safe-area-inset-right,0) 0 env(safe-area-inset-left,0);
   }
   .topbar{
@@ -115,12 +115,16 @@
   @keyframes spin{ to{ transform:rotate(360deg); } }
 
   /* ---------- 대화 본문 ---------- */
-  .thread{ flex:1; overflow-y:auto; padding:8px 12px 18px; -webkit-overflow-scrolling:touch; }
-  .msg{ display:flex; gap:9px; margin:10px 0; align-items:flex-end; }
+  /* 대화 스크롤 칸: 안쪽에서 넘쳐도 이 칸이 가로로 밀리지 않게 잠가 둬요 (iOS Safari 가로 팬 방지) */
+  .thread{ flex:1; min-width:0; max-width:100%; overflow-x:hidden; overflow-y:auto; padding:8px 12px 18px; -webkit-overflow-scrolling:touch; }
+  .msg{ display:flex; gap:9px; margin:10px 0; align-items:flex-end; min-width:0; max-width:100%; }
+  /* 말풍선을 감싸는 칸이 좁아질 수 있어야 코드블록이 화면 밖으로 밀리지 않아요 */
+  .msg > div{ min-width:0; max-width:100%; flex:0 1 auto; }
   .msg .av{ width:28px; height:28px; flex:0 0 auto; border-radius:10px; display:grid; place-items:center; font-size:14px; background:linear-gradient(150deg,#e9e2ff,#d9ecff); }
   .bubble{
     max-width:min(76%, 640px); padding:11px 14px; border-radius:18px; font-size:15px; line-height:1.62;
-    background:#fff; box-shadow:0 6px 18px rgba(118,86,54,.07); overflow-wrap:anywhere;
+    background:#fff; box-shadow:0 6px 18px rgba(118,86,54,.07); overflow-wrap:anywhere; word-break:break-word;
+    min-width:0; box-sizing:border-box;
   }
   .msg.me{ flex-direction:row-reverse; }
   .msg.me .bubble{ background:#312a4d; color:#fff; border-bottom-right-radius:6px; }
@@ -128,7 +132,8 @@
   .bubble p{ margin:0 0 8px; }
   .bubble p:last-child{ margin-bottom:0; }
   .bubble code{ background:rgba(124,92,252,.10); padding:1px 5px; border-radius:6px; font-size:.9em; }
-  .bubble pre{ background:#1f1a30; color:#f4f1ff; padding:11px 12px; border-radius:12px; overflow-x:auto; font-size:12.5px; line-height:1.5; margin:8px 0; }
+  .bubble pre{ background:#1f1a30; color:#f4f1ff; padding:11px 12px; border-radius:12px; overflow-x:auto; -webkit-overflow-scrolling:touch; font-size:12.5px; line-height:1.5; margin:8px 0;
+    max-width:100%; min-width:0; box-sizing:border-box; }
   .bubble pre code{ background:transparent; padding:0; font-size:inherit; }
   .bubble ul{ margin:6px 0; padding-left:20px; }
   .bubble li{ margin:2px 0; }
@@ -503,6 +508,46 @@
   var DEFAULT_OWNER = 'jadenfamily';
   var DEFAULT_REPO = 'kids-dashboard-data';
   var CODE_REPOS = ['home', 'kids-dashboard', 'fridge-dashboard', 'ledger-dashboard'];
+  /* 모델이 저장소를 jadenfamily/home · https://jadenfamily.github.io/home/chat.html 처럼 줘도
+     저장소 이름만 뽑아 씀 (그대로 비교하면 “그런 저장소 없음”으로 거절되던 문제) */
+  var REPO_ALIAS = {
+    'home': 'home', '허브': 'home', '홈': 'home',
+    'kids': 'kids-dashboard', 'kid': 'kids-dashboard', '아이': 'kids-dashboard',
+    'fridge': 'fridge-dashboard', '냉파': 'fridge-dashboard', '냉장고': 'fridge-dashboard',
+    'ledger': 'ledger-dashboard', '가계부': 'ledger-dashboard'
+  };
+  function normRepo(v) {
+    var raw = String(v == null ? '' : v).trim();
+    if (!raw) return '';
+    var s = raw.toLowerCase().replace(/[?#].*$/, '').replace(/\s+/g, '').replace(/\/+$/, '');
+    var tokens = s.split(/[\/]+/), i, k, t;
+    for (i = tokens.length - 1; i >= 0; i--) {
+      t = tokens[i].replace(/\.git$/, '');
+      if (!t) continue;
+      for (k = 0; k < CODE_REPOS.length; k++) if (t === CODE_REPOS[k]) return CODE_REPOS[k];
+    }
+    for (i = tokens.length - 1; i >= 0; i--) {
+      t = tokens[i].replace(/\.git$/, '');
+      if (t && REPO_ALIAS[t]) return REPO_ALIAS[t];
+      if (t && t.indexOf('jadenfamily.') >= 0) continue;
+    }
+    /* github.io 호스트만 준 경우(https://jadenfamily.github.io/)는 홈 저장소예요 */
+    if (/^https?:\/\/[^\/]*jadenfamily\.github\.io\/?$/.test(raw.toLowerCase())) return 'home';
+    t = (tokens[tokens.length - 1] || '').replace(/\.git$/, '');
+    return t;
+  }
+  /* jadenfamily/home/chat.html · 전체 주소 · 앞에 붙은 저장소 이름을 걷어 내요 */
+  function normPath(repo, p) {
+    var s = String(p == null ? '' : p).trim();
+    if (!s) return '';
+    s = s.replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\/[^\/]+\/[^\/]+\/(?:blob|tree|raw)\/[^\/]+\//i, '');
+    s = s.replace(/^https?:\/\/[^\/]+\//i, '');
+    s = s.replace(/[?#].*$/, '');
+    s = s.replace(/^\/+/, '');
+    var r = String(repo || '').toLowerCase();
+    if (r && s.toLowerCase().indexOf(r + '/') === 0) s = s.slice(r.length + 1);
+    return s;
+  }
 
   /* /home·아이 대시보드와 같은 열쇠를 써요 (같은 주소라서 로그인이 이어져요) */
   var K_DEVICE = 'kidsDashboard.device.v1';
@@ -2315,45 +2360,129 @@ var QR = (function () {
     return msg || fallback || ('HTTP ' + status);
   }
 
+  /* ---------- Gemini 함수 도구(functionDeclarations) ---------- */
+  /* Gemini는 OpenAPI 중 일부 키만 받아요. additionalProperties 같은 미지원 키는 빼고 넘겨요. */
+  function geminiSchema(s) {
+    if (!s || typeof s !== 'object') return null;
+    var out = {}, k;
+    if (s.type) out.type = String(s.type).toLowerCase();
+    if (s.description) out.description = String(s.description);
+    if (Object.prototype.toString.call(s.enum) === '[object Array]') out.enum = s.enum.map(function (x) { return String(x); });
+    if (Object.prototype.toString.call(s.required) === '[object Array]') out.required = s.required.map(function (x) { return String(x); });
+    if (s.properties && typeof s.properties === 'object') {
+      var props = {};
+      for (k in s.properties) {
+        if (!Object.prototype.hasOwnProperty.call(s.properties, k)) continue;
+        var ps = geminiSchema(s.properties[k]);
+        if (ps) props[k] = ps;
+      }
+      out.properties = props;
+      if (!out.type) out.type = 'object';
+    }
+    if (s.items) { var it = geminiSchema(s.items); if (it) out.items = it; }
+    return out;
+  }
+  function geminiToolDef(t) {
+    var d = {
+      name: String(t.name),
+      description: String(t.title || t.name) + ' — ' + String(t.desc || '') + ' 인자 형식: ' + String(t.argsHint || '{}')
+    };
+    var params = geminiSchema({ type: 'object', properties: TOOL_SCHEMAS[t.name] || {} });
+    if (params && params.properties && Object.keys(params.properties).length) d.parameters = params;
+    return d;
+  }
+  function geminiTools() {
+    var list = [];
+    for (var i = 0; i < TOOLS.length; i++) list.push(geminiToolDef(TOOLS[i]));
+    return [{ functionDeclarations: list }];
+  }
+  /* 함수 도구(tools·functionDeclarations)를 못 받는 모델인지 (400) */
+  function isGeminiToolError(status, err) {
+    if (Number(status) !== 400 && Number(status) !== 422) return false;
+    var e = String(err || '');
+    if (!/tool|function|declaration|schema/i.test(e)) return false;
+    if (/api key|api_key|quota|billing|permission|safety/i.test(e)) return false;
+    return true;
+  }
+
   async function geminiCall(model, req, opts) {
     var key = (opts && opts.key) || providerKey('gemini');
     if (!key) return { ok: false, status: 0, error: 'Gemini 키가 없어요', headers: {} };
-    var body = {
-      systemInstruction: { parts: [{ text: req.system }] },
-      contents: req.messages.map(function (m) {
-        var parts = [{ text: String(m.text || '') }];
-        var imgs = m.images || [], pdfs = m.pdfs || [], i;
-        for (i = 0; i < imgs.length; i++) parts.push({ inlineData: { mimeType: imgs[i].mime, data: imgs[i].data } });
-        for (i = 0; i < pdfs.length; i++) parts.push({ inlineData: { mimeType: 'application/pdf', data: pdfs[i].data } });
-        return { role: m.role === 'assistant' ? 'model' : 'user', parts: parts };
-      }),
-      generationConfig: { temperature: 0.5, maxOutputTokens: (opts && opts.maxTokens) || 2048 }
-    };
-    var res, txt = '';
-    try {
-      res = await window.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {
+    var mid = modelIdOf('gemini', model);
+    var withTools = !(opts && opts.noTools) && !noToolsModel(mid);
+    function buildBody(useTools) {
+      var body = {
+        systemInstruction: { parts: [{ text: req.system }] },
+        contents: req.messages.map(function (m) {
+          var parts = [{ text: String(m.text || '') }];
+          var imgs = m.images || [], pdfs = m.pdfs || [], i;
+          for (i = 0; i < imgs.length; i++) parts.push({ inlineData: { mimeType: imgs[i].mime, data: imgs[i].data } });
+          for (i = 0; i < pdfs.length; i++) parts.push({ inlineData: { mimeType: 'application/pdf', data: pdfs[i].data } });
+          return { role: m.role === 'assistant' ? 'model' : 'user', parts: parts };
+        }),
+        generationConfig: { temperature: 0.5, maxOutputTokens: (opts && opts.maxTokens) || 2048 }
+      };
+      /* 말로만 “찾아볼게요” 하지 않고 실제로 도구를 부르도록 함수 도구를 함께 보내요 */
+      if (useTools) {
+        body.tools = geminiTools();
+        body.toolConfig = { functionCallingConfig: { mode: 'AUTO' } };
+      }
+      return body;
+    }
+    function send(useTools) {
+      return window.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildBody(useTools)),
         signal: (opts && opts.signal) || undefined
-      });
-      txt = await res.text();
-    } catch (e) {
-      return { ok: false, status: 0, error: '네트워크에 연결하지 못했어요', headers: {} };
+      }).then(function (r) { return r.text().then(function (t) { return { res: r, txt: t, tools: useTools }; }); });
     }
-    var headers = headerMap(res);
+    var got;
+    try { got = await send(withTools); }
+    catch (e) { return { ok: false, status: 0, error: '네트워크에 연결하지 못했어요', headers: {} }; }
+    var headers = headerMap(got.res);
     var json = null;
-    try { json = JSON.parse(txt); } catch (e) { json = null; }
-    noteResult('gemini', model, res.status, headers, txt);
-    if (!res.ok) return { ok: false, status: res.status, error: textFromErr(res.status, json, 'HTTP ' + res.status), headers: headers, body: txt };
-    var parts = (json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
-    var out = '';
-    for (var i = 0; i < parts.length; i++) if (parts[i] && parts[i].text) out += parts[i].text;
-    if (!out) {
-      var block = json && json.promptFeedback && json.promptFeedback.blockReason;
-      return { ok: false, status: res.status, error: block ? ('이 요청은 안전 정책으로 막혔어요 (' + block + ')') : '빈 답변이 왔어요', headers: headers, body: txt };
+    try { json = JSON.parse(got.txt); } catch (e) { json = null; }
+    noteResult('gemini', model, got.res.status, headers, got.txt);
+    var errMsg = got.res.ok ? '' : textFromErr(got.res.status, json, 'HTTP ' + got.res.status);
+    /* 이 모델이 함수 도구를 지원하지 않으면 이 모델만 도구 없이 한 번 더 시도해요 */
+    if (!got.res.ok && got.tools && (isGeminiToolError(got.res.status, errMsg) || isNoToolSupportError(got.res.status, errMsg))) {
+      markNoToolsModel(mid);
+      try { got = await send(false); }
+      catch (e2) { return { ok: false, status: 0, error: '네트워크에 연결하지 못했어요', headers: {} }; }
+      headers = headerMap(got.res);
+      json = null;
+      try { json = JSON.parse(got.txt); } catch (e3) { json = null; }
+      noteResult('gemini', model, got.res.status, headers, got.txt);
+      errMsg = got.res.ok ? '' : textFromErr(got.res.status, json, 'HTTP ' + got.res.status);
     }
-    return { ok: true, status: res.status, text: out, headers: headers };
+    if (!got.res.ok) return { ok: false, status: got.res.status, error: errMsg, headers: headers, body: got.txt };
+    var parts = (json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
+    var out = '', calls = [];
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i] || {};
+      /* 생각(thought) 조각은 화면에 그대로 보여 주지 않아요 */
+      if (p.thought) continue;
+      if (p.text) out += p.text;
+      var fc = p.functionCall;
+      if (fc && fc.name) {
+        var args = (fc.args && typeof fc.args === 'object') ? fc.args : {};
+        calls.push({ id: 'gem_' + (calls.length + 1), name: String(fc.name), args: args });
+      }
+    }
+    /* 도구를 부른 답변은 본문이 비어 있는 게 정상이에요 */
+    if (!String(out).trim() && !calls.length) {
+      var block = json && json.promptFeedback && json.promptFeedback.blockReason;
+      var fin = json && json.candidates && json.candidates[0] && json.candidates[0].finishReason;
+      return {
+        ok: false, status: got.res.status, headers: headers, body: got.txt,
+        error: block ? ('이 요청은 안전 정책으로 막혔어요 (' + block + ')')
+          : (fin && fin !== 'STOP' ? ('답변이 중간에 멈췄어요 (' + fin + ')') : '빈 답변이 왔어요')
+      };
+    }
+    /* 도구 결과는 다음 차례에 [도구 결과 …] 글로 돌아가요.
+       (functionCall/functionResponse parts를 되돌려 보내면 사고 서명(thoughtSignature)이 없어 400이 나는 모델이 있어요) */
+    return { ok: true, status: got.res.status, text: String(out), toolCalls: calls, headers: headers };
   }
 
   function openaiStyleCall(url, pid, extraHeaders) {
@@ -2619,14 +2748,15 @@ var QR = (function () {
       desc: '홈·아이·냉파·가계부 저장소의 파일 목록을 봐요.',
       argsHint: '{"repo":"home|kids-dashboard|fridge-dashboard|ledger-dashboard","path":""}',
       run: async function (a) {
-        var repo = String(a.repo || '');
+        var repo = normRepo(a.repo);
         if (CODE_REPOS.indexOf(repo) < 0) return { text: '이 네 저장소만 볼 수 있어요: ' + CODE_REPOS.join(', '), label: '코드' };
         if (!S.ai.codeToken) return { text: '코드 저장소 토큰이 없어요. 설정에서 넣어 주세요.', label: '코드' };
-        var r = await ghGetAt(repo, String(a.path || ''), S.ai.codeToken);
+        var dir = normPath(repo, a.path);
+        var r = await ghGetAt(repo, dir, S.ai.codeToken);
         if (!r.ok) return { text: r.error, label: '코드 · ' + repo };
         if (!r.list) return { text: '폴더가 아니에요.', label: '코드 · ' + repo };
         var lines = r.list.map(function (x) { return (x.type === 'dir' ? '📁 ' : '📄 ') + x.name + ' (' + (x.size || 0) + 'B)'; });
-        return { text: repo + '/' + String(a.path || '') + '\n' + lines.join('\n'), label: '코드 · ' + repo };
+        return { text: repo + '/' + dir + '\n' + lines.join('\n'), label: '코드 · ' + repo };
       }
     },
     {
@@ -2636,10 +2766,10 @@ var QR = (function () {
       desc: '파일 안에서 단어나 정규식을 찾아 “줄 번호 + 짧은 미리보기”만 돌려줘요. 큰 파일도 토큰을 적게 써요. 먼저 이걸로 위치를 찾으세요.',
       argsHint: '{"repo":"kids-dashboard","path":"index.html","query":"function renderRoutine","regex":false,"max":30}',
       run: async function (a) {
-        var repo = String(a.repo || '');
+        var repo = normRepo(a.repo);
         if (CODE_REPOS.indexOf(repo) < 0) return { text: '이 네 저장소만 볼 수 있어요: ' + CODE_REPOS.join(', '), label: '코드' };
         if (!S.ai.codeToken) return { text: '코드 저장소 토큰이 없어요. 설정에서 넣어 주세요.', label: '코드' };
-        var p = String(a.path || 'index.html');
+        var p = normPath(repo, a.path || 'index.html');
         var q = String(a.query || '').trim();
         if (!q) return { text: '찾을 단어(query)가 필요해요.', label: '코드 검색' };
         var r = await ghGetAt(repo, p, S.ai.codeToken);
@@ -2679,10 +2809,10 @@ var QR = (function () {
       desc: '파일에서 원하는 줄 구간만 읽어요. 큰 파일은 통째로 보내지 마세요.',
       argsHint: '{"repo":"kids-dashboard","path":"index.html","start":1200,"lines":120}',
       run: async function (a) {
-        var repo = String(a.repo || '');
+        var repo = normRepo(a.repo);
         if (CODE_REPOS.indexOf(repo) < 0) return { text: '이 네 저장소만 볼 수 있어요: ' + CODE_REPOS.join(', '), label: '코드' };
         if (!S.ai.codeToken) return { text: '코드 저장소 토큰이 없어요. 설정에서 넣어 주세요.', label: '코드' };
-        var p = String(a.path || '');
+        var p = normPath(repo, a.path);
         if (!p) return { text: '파일 경로가 필요해요.', label: '코드' };
         var r = await ghGetAt(repo, p, S.ai.codeToken);
         if (!r.ok) return { text: r.error, label: '코드' };
@@ -2706,10 +2836,10 @@ var QR = (function () {
       desc: '작은 파일 전체를 읽어요. 200줄이 넘으면 앞부분만 돌려주니 search_code·read_code_slice를 쓰세요.',
       argsHint: '{"repo":"home","path":"index.html"}',
       run: async function (a) {
-        var repo = String(a.repo || '');
+        var repo = normRepo(a.repo);
         if (CODE_REPOS.indexOf(repo) < 0) return { text: '이 네 저장소만 볼 수 있어요: ' + CODE_REPOS.join(', '), label: '코드' };
         if (!S.ai.codeToken) return { text: '코드 저장소 토큰이 없어요. 설정에서 넣어 주세요.', label: '코드' };
-        var p = String(a.path || '');
+        var p = normPath(repo, a.path);
         if (!p) return { text: '파일 경로가 필요해요.', label: '코드' };
         var r = await ghGetAt(repo, p, S.ai.codeToken);
         if (!r.ok) return { text: r.error, label: '코드 · ' + repo };
@@ -2733,10 +2863,10 @@ var QR = (function () {
       desc: '코드를 고쳐서 3단계 검사를 돌리고, 도현님이 [반영하기]를 눌러야만 배포해요. 큰 파일은 content로 통째로 쓰지 말고 edits(찾아 바꾸기)로 작게 고치세요.',
       argsHint: '{"repo":"kids-dashboard","path":"index.html","edits":[{"old_string":"정확히 같은 글자","new_string":"새 글자","replace_all":false}],"summary":"무엇을 왜 바꾸는지"} 또는 작은 파일이면 {"content":"파일 전체"} / {"range":{"start":10,"end":20,"text":"새 줄들"}}',
       run: async function (a, ctx) {
-        var repo = String(a.repo || '');
+        var repo = normRepo(a.repo);
         if (CODE_REPOS.indexOf(repo) < 0) return { text: '이 네 저장소만 고칠 수 있어요: ' + CODE_REPOS.join(', '), label: '코드' };
         if (!S.ai.codeToken) return { text: '코드 저장소 토큰이 없어요. 설정에서 넣어 주세요.', label: '코드' };
-        var p = String(a.path || '');
+        var p = normPath(repo, a.path);
         if (!p) return { text: '파일 경로가 필요해요.', label: '코드' };
         var cur = await ghGetAt(repo, p, S.ai.codeToken);
         if (!cur.ok) return { text: cur.error, label: '코드' };
@@ -2869,9 +2999,124 @@ var QR = (function () {
     return null;
   }
 
+  /* 도구별로 top-level에 그냥 눌러놓은 인자까지 주워요 ({"tool":"search_code","repo":...}) */
+  var TOOL_ARG_KEYS = {
+    family_data: ['kind', 'path'],
+    family_save: ['path', 'data', 'reason'],
+    code_list: ['repo', 'path'],
+    search_code: ['repo', 'path', 'query', 'regex', 'max'],
+    read_code_slice: ['repo', 'path', 'start', 'lines', 'end'],
+    code_read: ['repo', 'path'],
+    code_edit: ['repo', 'path', 'edits', 'content', 'range', 'summary', 'oldText', 'newText']
+  };
+  var FAMILY_KINDS = ['fridge', 'recipes', 'ledger', 'kids', 'summary', 'files', 'read'];
+
+  function parseArgsObj(v) {
+    if (v == null) return null;
+    if (typeof v === 'string') {
+      var s = v.trim();
+      if (!s) return null;
+      try { var j = JSON.parse(s); return (j && typeof j === 'object') ? j : null; } catch (e) { return null; }
+    }
+    return (typeof v === 'object') ? v : null;
+  }
+  function pickArgs(name, j) {
+    var keys = TOOL_ARG_KEYS[name] || [], out = {}, any = false;
+    for (var i = 0; i < keys.length; i++) {
+      if (j[keys[i]] === undefined) continue;
+      out[keys[i]] = j[keys[i]];
+      any = true;
+    }
+    return any ? out : {};
+  }
+  /* 인자 모양만 보고 도구 이름을 알아내요 (모델이 {"repo":"home","path":"chat.html","query":"settings"}만 쓸 때) */
+  function inferTool(j) {
+    if (!j || typeof j !== 'object' || Object.prototype.toString.call(j) === '[object Array]') return null;
+    function has(k) { return j[k] !== undefined && j[k] !== null && j[k] !== ''; }
+    var repo = has('repo') ? normRepo(j.repo) : '';
+    var inRepos = !!repo && CODE_REPOS.indexOf(repo) >= 0;
+    var path = has('path') ? j.path : (has('file') ? j.file : (has('filepath') ? j.filepath : (has('file_path') ? j.file_path : null)));
+    var query = has('query') ? j.query : (has('q') ? j.q : (has('keyword') ? j.keyword : (has('search') ? j.search : null)));
+    var edits = has('edits') ? j.edits : (has('changes') ? j.changes : (has('patches') ? j.patches : null));
+    var oldT = has('oldText') ? j.oldText : (has('old_text') ? j.old_text : (has('old_string') ? j.old_string : (has('find') ? j.find : null)));
+    var newT = has('newText') ? j.newText : (has('new_text') ? j.new_text : (has('new_string') ? j.new_string : (has('replace') ? j.replace : null)));
+
+    /* 가족 데이터 저장 */
+    if (!has('repo') && has('data') && path != null) {
+      return { name: 'family_save', args: { path: path, data: j.data, reason: String(j.reason || '') } };
+    }
+    if (inRepos) {
+      /* 코드 수정 */
+      if (edits || (oldT != null && newT != null) || has('content') || j.range) {
+        var a = { repo: repo };
+        if (path != null) a.path = path;
+        if (edits) a.edits = edits;
+        else if (oldT != null && newT != null) a.edits = [{ old_string: String(oldT), new_string: String(newT), replace_all: !!j.replace_all }];
+        if (has('content')) a.content = j.content;
+        if (j.range) a.range = j.range;
+        if (has('summary')) a.summary = String(j.summary);
+        if (a.edits || a.content || a.range) return { name: 'code_edit', args: a };
+      }
+      /* 코드 검색 */
+      if (query != null) {
+        var s = { repo: repo, query: String(query) };
+        if (path != null) s.path = path;
+        if (j.regex != null) s.regex = !!j.regex;
+        if (j.max != null) s.max = j.max;
+        return { name: 'search_code', args: s };
+      }
+      /* 파일 구간 읽기 */
+      if (has('start') || has('lines') || has('end')) {
+        var st = Number(j.start) || 1, ln = Number(j.lines) || 0;
+        if (!ln && has('end')) ln = Math.max(1, (Number(j.end) || st) - st + 1);
+        var r = { repo: repo, start: st, lines: ln || 120 };
+        if (path != null) r.path = path;
+        return { name: 'read_code_slice', args: r };
+      }
+      /* 파일 전체 읽기 / 목록 */
+      if (path != null) return { name: 'code_read', args: { repo: repo, path: path } };
+      return { name: 'code_list', args: { repo: repo, path: has('path') ? j.path : '' } };
+    }
+    /* 가족 데이터 읽기 */
+    if (has('kind') && FAMILY_KINDS.indexOf(String(j.kind)) >= 0) {
+      var f = { kind: String(j.kind) };
+      if (path != null) f.path = path;
+      return { name: 'family_data', args: f };
+    }
+    return null;
+  }
+  /* 도구 인자를 도구가 알아듣는 모양으로 다듬어요 */
+  function normalizeToolArgs(name, args) {
+    var a = (args && typeof args === 'object') ? args : {};
+    if (name === 'family_data' || name === 'family_save') return a;
+    if (a.repo != null) a.repo = normRepo(a.repo);
+    var pKey = a.path != null ? 'path' : (a.file != null ? 'file' : (a.filepath != null ? 'filepath' : null));
+    if (pKey) {
+      var np = normPath(a.repo, a[pKey]);
+      if (pKey !== 'path') delete a[pKey];
+      a.path = np;
+    }
+    if (name === 'search_code') {
+      if (a.query == null) a.query = (a.q != null ? a.q : (a.keyword != null ? a.keyword : a.search));
+      if (a.query != null) a.query = String(a.query);
+    }
+    if (name === 'code_edit') {
+      var oldT = a.oldText != null ? a.oldText : a.old_string;
+      var newT = a.newText != null ? a.newText : a.new_string;
+      if (!a.edits && oldT != null && newT != null) a.edits = [{ old_string: String(oldT), new_string: String(newT), replace_all: !!a.replace_all }];
+      delete a.oldText; delete a.newText; delete a.old_string; delete a.new_string;
+      if (a.edits && Object.prototype.toString.call(a.edits) !== '[object Array]') a.edits = [a.edits];
+    }
+    if (name === 'read_code_slice' && !Number(a.lines) && a.end != null) {
+      a.lines = Math.max(1, (Number(a.end) || Number(a.start) || 1) - (Number(a.start) || 1) + 1);
+      delete a.end;
+    }
+    return a;
+  }
+
   function parseToolCall(text) {
     if (!text) return null;
-    var m = /```[a-zA-Z]*\s*([\s\S]*?)```/g, x;
+    var m = /```[a-zA-Z0-9+#._-]*\s*([\s\S]*?)```/g, x;
     while ((x = m.exec(text))) {
       var call = tryJsonTool(x[1].trim());
       if (call) return call;
@@ -2886,11 +3131,29 @@ var QR = (function () {
       if (a >= 0 && b > a) { try { j = JSON.parse(s.slice(a, b + 1)); } catch (e2) { j = null; } }
     }
     if (!j || typeof j !== 'object') return null;
-    var name = j.tool || j.name || j.tool_name;
-    if (!name || !toolByName(String(name))) return null;
-    var args = j.args || j.arguments || j.input || {};
-    if (typeof args === 'string') { try { args = JSON.parse(args); } catch (e) { args = {}; } }
-    return { name: String(name), args: (args && typeof args === 'object') ? args : {} };
+    if (Object.prototype.toString.call(j) === '[object Array]') {
+      for (var i = 0; i < j.length && i < 4; i++) { var one = tryJsonObj(j[i]); if (one) return one; }
+      return null;
+    }
+    return tryJsonObj(j);
+  }
+  function tryJsonObj(j) {
+    if (!j || typeof j !== 'object') return null;
+    /* {"function":{"name":…,"arguments":…}} 모양도 받아요 */
+    if (j.function && typeof j.function === 'object' && j.function.name) {
+      var fa = parseArgsObj(j.function.arguments != null ? j.function.arguments : j.function.args) || {};
+      return { name: String(j.function.name), args: normalizeToolArgs(String(j.function.name), fa) };
+    }
+    var name = String(j.tool || j.name || j.tool_name || j.toolName || '').trim();
+    if (name && toolByName(name)) {
+      var args = parseArgsObj(j.args != null ? j.args : (j.arguments != null ? j.arguments : (j.input != null ? j.input : j.parameters)));
+      if (!args || !Object.keys(args).length) args = pickArgs(name, j);
+      return { name: name, args: normalizeToolArgs(name, args) };
+    }
+    /* 이름이 없거나 낯설면 인자 모양으로 알아내요 (```json 안의 {"repo":…} 같은 경우) */
+    var inf = inferTool(j);
+    if (!inf) return null;
+    return { name: inf.name, args: normalizeToolArgs(inf.name, inf.args) };
   }
 
   /* ============ 3단계 자동 검사 ============ */
@@ -3559,7 +3822,7 @@ var QR = (function () {
       var t = '<div style="margin:6px 0 6px 36px;font-size:11.5px;font-weight:800;color:#8a83a0">' +
         '🔧 ' + esc(m.label || m.tool || '도구') + '</div>';
       if (m.card) t += '<div style="margin-left:36px">' + (m.card.kind === 'edit' ? editCardHtml(m.card) : writeCardHtml(m.card)) + '</div>';
-      if (m.text && !m.card) t += '<div style="margin-left:36px;font-size:12px;font-weight:700;color:#7c7590;white-space:pre-wrap;max-width:80%;">' + esc(String(m.text).slice(0, 900)) + '</div>';
+      if (m.text && !m.card) t += '<div style="margin-left:36px;font-size:12px;font-weight:700;color:#7c7590;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-width:80%;">' + esc(String(m.text).slice(0, 900)) + '</div>';
       return t;
     }
     var me = m.role === 'user';
@@ -3699,6 +3962,8 @@ var QR = (function () {
     lines.push('[도구 사용법]');
     lines.push('도구는 함수 호출(도구 이름 + JSON 인자)로 부른다. 함수 호출을 쓸 수 없는 모델이면 아래 ```tool 블록을 출력해. 일반 답변과 섞어도 된다. 한 번에 하나씩.');
     lines.push('“찾아볼게요·확인할게요”처럼 말만 하고 끝내지 마라. 바로 도구를 호출해 실행하고, 그 결과로 답한다.');
+    lines.push('도구 결과가 돌아오면 같은 도구를 또 부르지 말고 그 결과로 답한다. 결과가 모자랄 때만 다른 인자로 한 번 더 부른다.');
+    lines.push('도구 인자의 repo는 home·kids-dashboard·fridge-dashboard·ledger-dashboard 중 하나만 쓴다.');
     lines.push('```tool');
     lines.push('{"tool":"도구이름","args":{}}');
     lines.push('```');
@@ -3764,7 +4029,10 @@ var QR = (function () {
   }
 
   function stripToolBlock(text) {
-    return String(text || '').replace(/```[a-zA-Z]*\s*[\s\S]*?```/g, '').trim();
+    var s = String(text || '').replace(/```[a-zA-Z]*\s*[\s\S]*?```/g, '').trim();
+    /* 도구 호출 JSON만 덩그러니 있는 답변이면 말풍선에 그대로 보여 주지 않아요 */
+    if (s && parseToolCall(s)) return '';
+    return s;
   }
 
   /* “찾을게요”처럼 말로만 하고 도구를 부르지 않았는지 */
@@ -3872,9 +4140,11 @@ var QR = (function () {
             label: '도구 이름 확인'
           };
         } else {
-          workStep(t, actionLabel(one.name, one.args));
+          /* 저장소 이름·경로가 전체 주소나 owner/repo로 와도 도구가 알아듣게 다듬어요 */
+          var toolArgs = normalizeToolArgs(one.name, one.args || {});
+          workStep(t, actionLabel(one.name, toolArgs));
           try {
-            out = await tool.run(one.args || {}, { threadId: t.id });
+            out = await tool.run(toolArgs, { threadId: t.id });
           } catch (e) {
             out = { text: '도구를 실행하지 못했어요: ' + (e && e.message ? e.message : ''), label: '오류' };
           }
