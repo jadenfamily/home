@@ -160,24 +160,44 @@
   .quotebar .q-txt{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .quotebar .q-x{ border:0; background:none; color:#8a83a0; font-size:15px; font-weight:900; padding:0 4px; }
   .msg.swiping{ transform:translateX(7px); transition:transform .08s; }
-  /* ---------- 접이식 작업 상태 칩 ---------- */
+  /* ---------- 접이식 작업 상태 칩 + 세로 타임라인 ---------- */
   .workwrap{ display:block; padding:0 2px; margin:2px 0 4px 36px; }
-  .work{ display:inline-block; max-width:100%; background:#f7f3ff; border:1.5px solid #ece3ff; border-radius:13px; overflow:hidden; }
-  .work-head{ display:flex; align-items:center; gap:6px; width:100%; border:0; background:none; padding:7px 11px; font-size:12px; font-weight:900; color:#5b4b9a; text-align:left; }
-  .work-head .w-do{ max-width:44vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#6a45d8; }
+  .work{ display:block; width:-webkit-fit-content; width:fit-content; max-width:100%; background:#f7f3ff; border:1.5px solid #ece3ff; border-radius:14px; overflow:hidden; }
+  .work.open{ width:100%; max-width:520px; }
+  .work-head{ display:flex; align-items:center; gap:6px; width:100%; min-width:0; border:0; background:none; padding:7px 11px; font-size:12px; font-weight:900; color:#5b4b9a; text-align:left; }
+  .work-head > span{ flex:0 0 auto; }
+  .work-head .w-do{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#6a45d8; }
   .work-head .w-elapsed{ font-variant-numeric:tabular-nums; }
   .work-head .w-caret{ color:#a79fbb; margin-left:2px; }
   .work-head .w-sep{ color:#c3bbd6; }
-  .work-log{ border-top:1.5px solid #ece3ff; padding:7px 11px 9px; display:flex; flex-direction:column; gap:4px; background:#fcfaff; }
-  .w-line{ display:flex; gap:7px; font-size:11px; font-weight:800; color:#7c7590; }
-  .w-line .w-t{ color:#b3abc4; font-variant-numeric:tabular-nums; min-width:34px; }
-  .w-line .w-l{ flex:1; min-width:0; }
-  .w-line .w-d{ color:#a79fbb; }
-  .w-line.now .w-l{ color:#6a45d8; }
+  /* 펼친 기록: 얇은 세로 연결선 + 단계별 아이콘 + 사람이 읽는 요약 (생코드 없음) */
+  .work-log{ border-top:1.5px solid #ece3ff; background:#fcfaff; padding:10px 12px 11px; display:flex; flex-direction:column; }
+  .w-line{ position:relative; display:flex; align-items:flex-start; gap:8px; padding:0 0 9px; font-size:11.5px; font-weight:800; color:#5b4b9a; }
+  .w-line:last-child{ padding-bottom:0; }
+  .w-line:not(:last-child)::before{ content:''; position:absolute; left:9px; top:20px; bottom:0; width:2px; background:#ded2ff; border-radius:2px; }
+  .w-ico{ position:relative; z-index:1; flex:0 0 20px; width:20px; height:20px; border-radius:50%; background:#fff; border:1.5px solid #e2d8ff; display:flex; align-items:center; justify-content:center; font-size:10px; line-height:1; }
+  .w-body{ flex:1 1 auto; min-width:0; padding-top:2px; line-height:1.45; overflow-wrap:anywhere; word-break:break-word; }
+  .w-body .w-verb{ font-weight:900; color:#5b4b9a; }
+  .w-body .w-sub{ font-weight:700; color:#8a83a0; }
+  .w-line .w-d{ flex:0 0 auto; padding-top:2px; font-size:10.5px; font-weight:800; color:#b3abc4; font-variant-numeric:tabular-nums; }
+  .w-line.now .w-ico{ border-color:#b9a5f7; animation:wpulse 1.5s infinite; }
+  .w-line.now .w-verb{ color:#6a45d8; }
+  .w-line.now .w-d{ color:#8b6cf0; }
+  @keyframes wpulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(139,108,240,.32); } 50%{ box-shadow:0 0 0 5px rgba(139,108,240,0); } }
   .work.done{ background:#f2fbf6; border-color:#d6f2e2; }
   .work.done .work-head{ color:#0f7a55; }
+  .work.done .work-head .w-do{ color:#0f7a55; }
   .work.done .work-log{ border-top-color:#d6f2e2; background:#f8fdfa; }
-  .work.done .w-line.now .w-l{ color:#0f7a55; }
+  .work.done .w-line{ color:#0f7a55; }
+  .work.done .w-line:not(:last-child)::before{ background:#cbe8da; }
+  .work.done .w-ico{ border-color:#cdeedc; }
+  .work.done .w-body .w-verb{ color:#0f7a55; }
+  .work.done .w-body .w-sub{ color:#6f8f80; }
+  .work.done .w-line .w-d{ color:#9db8ac; }
+  /* 도구가 남긴 짧은 안내·오류만 본문에 (생코드는 절대 쏟지 않아요) */
+  .tool-card{ margin:6px 0 8px 36px; }
+  .tool-card .tool-head{ font-size:11.5px; font-weight:800; color:#8a83a0; margin:0 0 5px; }
+  .tool-note{ margin:4px 0 6px 36px; max-width:80%; padding:6px 10px; border-radius:10px; background:#f7f5fb; border-left:3px solid #e2d8ff; font-size:11.5px; font-weight:800; color:#7c7590; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; }
   @keyframes blink{ 0%,60%,100%{ opacity:.25; transform:translateY(0); } 30%{ opacity:1; transform:translateY(-2px); } }
   .welcome{ text-align:center; padding:40px 16px; color:var(--ink-2); }
   .welcome .big{ font-size:44px; }
@@ -2726,7 +2746,7 @@ var QR = (function () {
           var one = await readFamily(p);
           if (!one.ok) return { text: one.error, label: '가족 데이터' };
           if (one.missing) return { text: p + ' 파일은 아직 없어요.', label: '가족 데이터' };
-          return { text: briefJson(one.data, 6000), label: p };
+          return { text: briefJson(one.data, 6000), label: p, quiet: true, info: { kind: 'read', path: p } };
         }
         if (kind === 'files') {
           var dir = String(a.path || '');
@@ -2734,7 +2754,7 @@ var QR = (function () {
           if (!r.ok) return { text: r.error, label: '파일 목록' };
           if (!r.list) return { text: '폴더가 아니에요: ' + dir, label: '파일 목록' };
           var names = r.list.map(function (x) { return (x.type === 'dir' ? '📁 ' : '📄 ') + x.name; });
-          return { text: dir + ' 안에는 이렇게 있어요:\n' + names.join('\n'), label: '파일 목록' };
+          return { text: dir + ' 안에는 이렇게 있어요:\n' + names.join('\n'), label: '파일 목록', quiet: true };
         }
         var paths = [];
         if (kind === 'fridge') paths = ['fridge/inventory.json', 'fridge/meals.json', 'fridge/settings.json'];
@@ -2749,7 +2769,7 @@ var QR = (function () {
           else if (got.missing) out.push(paths[k] + ': 아직 없어요');
           else out.push(paths[k] + ':\n' + briefJson(got.data, kind === 'summary' ? 2400 : 5000));
         }
-        return { text: out.join('\n\n'), label: '가족 데이터 · ' + kind };
+        return { text: out.join('\n\n'), label: '가족 데이터 · ' + kind, quiet: true };
       }
     },
     {
@@ -2788,7 +2808,7 @@ var QR = (function () {
         if (!r.ok) return { text: r.error, label: '코드 · ' + repo };
         if (!r.list) return { text: '폴더가 아니에요.', label: '코드 · ' + repo };
         var lines = r.list.map(function (x) { return (x.type === 'dir' ? '📁 ' : '📄 ') + x.name + ' (' + (x.size || 0) + 'B)'; });
-        return { text: repo + '/' + dir + '\n' + lines.join('\n'), label: '코드 · ' + repo };
+        return { text: repo + '/' + dir + '\n' + lines.join('\n'), label: '코드 · ' + repo, quiet: true, info: { kind: 'list', path: dir } };
       }
     },
     {
@@ -2830,7 +2850,9 @@ var QR = (function () {
         return {
           text: '“' + q + '” ' + hits.length + '군데 (파일 ' + lines.length + '줄). 필요한 줄만 read_code_slice로 읽으세요.\n' + out.join('\n') +
             (hits.length > max ? '\n… 더 있어요 (max를 올리거나 단어를 좁혀 주세요)' : ''),
-          label: '코드 검색 · ' + p
+          label: '코드 검색 · ' + p,
+          quiet: true,
+          info: { kind: 'search', path: p, query: q, hits: hits.length }
         };
       }
     },
@@ -2838,7 +2860,7 @@ var QR = (function () {
       name: 'read_code_slice',
       emoji: '📖',
       title: '코드 일부만 읽기',
-      desc: '파일에서 원하는 줄 구간만 읽어요. 큰 파일은 통째로 보내지 마세요.',
+      desc: '파일에서 원하는 줄 구간만 읽어요. 기본 120줄, 한 번에 200줄까지 읽을 수 있어요. 큰 파일은 통째로 보내지 마세요.',
       argsHint: '{"repo":"kids-dashboard","path":"index.html","start":1200,"lines":120}',
       run: async function (a) {
         var repo = normRepo(a.repo);
@@ -2857,7 +2879,9 @@ var QR = (function () {
         for (var i = start; i <= end; i++) out.push(('      ' + i).slice(-6) + '| ' + lines[i - 1]);
         return {
           text: repo + '/' + p + ' · ' + start + '~' + end + '줄 (전체 ' + lines.length + '줄)\n' + out.join('\n'),
-          label: '코드 읽기 · ' + p + ' ' + start + '~' + end
+          label: '코드 읽기 · ' + p + ' ' + start + '~' + end,
+          quiet: true,
+          info: { kind: 'read', path: p, start: start, end: end, total: lines.length }
         };
       }
     },
@@ -2882,10 +2906,12 @@ var QR = (function () {
           var head = lines.slice(0, 80).map(function (l, i) { return (i + 1) + '| ' + l; }).join('\n');
           return {
             text: '이 파일은 ' + lines.length + '줄(' + Math.round(text.length / 1024) + 'KB)이라 통째로 보내지 않아요. 토큰을 아끼려면 search_code로 위치를 찾고 read_code_slice로 필요한 구간만 읽으세요.\n\n앞 80줄만 보여 줘요:\n' + head,
-            label: '코드 · ' + repo + '/' + p + ' (앞부분만)'
+            label: '코드 · ' + repo + '/' + p + ' (앞부분만)',
+            quiet: true,
+            info: { kind: 'readAll', path: p, total: lines.length }
           };
         }
-        return { text: text, label: '코드 · ' + repo + '/' + p };
+        return { text: text, label: '코드 · ' + repo + '/' + p, quiet: true, info: { kind: 'readAll', path: p, total: lines.length } };
       }
     },
     {
@@ -3732,22 +3758,6 @@ var QR = (function () {
   }
 
   /* ============ 작업 상태(⏱ 경과·지금 하는 일) ============ */
-  var TOOL_ACTIONS = {
-    family_data: '가족 데이터 읽는 중…',
-    family_save: '가족 데이터 저장 준비 중…',
-    code_list: '저장소 파일 목록 보는 중…',
-    search_code: '저장소 파일 검색 중…',
-    read_code_slice: '저장소 코드 읽는 중…',
-    code_read: '저장소 코드 읽는 중…',
-    code_edit: '코드 수정 중…'
-  };
-  function actionLabel(name, args) {
-    var a = args || {};
-    var act = TOOL_ACTIONS[name] || ((name || '도구') + ' 실행 중…');
-    if (name === 'code_edit') return '✏️ ' + act;
-    if (a.repo && /^(code_|search_|read_)/.test(String(name))) return '🔧 ' + a.repo + ' ' + act.replace('저장소 ', '');
-    return '🔧 ' + act;
-  }
   function fmtElapsed(ms) {
     var s = Math.max(0, Math.floor(Number(ms || 0) / 1000));
     return Math.floor(s / 60) + ':' + pad2(s % 60);
@@ -3772,36 +3782,115 @@ var QR = (function () {
   function workTimerStop() {
     if (workTimerStart.id) { window.clearInterval(workTimerStart.id); workTimerStart.id = 0; }
   }
+  /* ---------- 작업 단계를 사람이 읽는 요약으로 ---------- */
+  var STEP_ICONS = ['🧠', '🔁', '⚡', '🔍', '📖', '📁', '✏️', '📊', '💾', '🔧', '⏳', '✓'];
+  function fileBase(p) {
+    var s = String(p || '').replace(/\/+$/, '');
+    return s.split('/').pop() || s;
+  }
+  function shortQ(q) {
+    var s = String(q == null ? '' : q).replace(/\s+/g, ' ').trim();
+    return s.length > 30 ? s.slice(0, 30) + '…' : s;
+  }
+  /* 도구 한 단계: {ico, verb, sub} — 파일 이름·찾은 말·건수·줄 구간까지만, 생코드는 없음 */
+  function toolStep(name, args, out) {
+    var a = args || {};
+    var info = (out && out.info) || {};
+    var repo = a.repo ? normRepo(a.repo) : 'home';
+    var path = info.path != null ? String(info.path) : normPath(repo, a.path);
+    var f = fileBase(path);
+    if (name === 'search_code') {
+      var sub = f + ' · “' + shortQ(info.query != null ? info.query : a.query) + '”';
+      if (info.hits != null) sub += info.hits ? ' ' + info.hits + '건' : ' 결과 없음';
+      return { ico: '🔍', verb: '코드 검색', sub: sub };
+    }
+    if (name === 'read_code_slice') {
+      var st = Number(info.start || a.start) || 1;
+      var sub2 = f;
+      if (info.end != null) sub2 += ' ' + st + '~' + info.end + '줄';
+      else sub2 += ' ' + st + '줄부터';
+      return { ico: '📖', verb: '코드 읽기', sub: sub2 };
+    }
+    if (name === 'code_read') return { ico: '📖', verb: '코드 읽기', sub: f + (info.total ? ' (' + info.total + '줄)' : '') };
+    if (name === 'code_list') return { ico: '📁', verb: '파일 목록', sub: repo + (path ? '/' + path : '') };
+    if (name === 'code_edit') return { ico: '✏️', verb: '코드 수정', sub: repo + '/' + f };
+    if (name === 'family_data') return { ico: '📊', verb: '가족 데이터', sub: String(a.kind || 'summary') };
+    if (name === 'family_save') return { ico: '💾', verb: '저장 제안', sub: String(a.path || '') };
+    return { ico: '🔧', verb: String((out && out.label) || name || '도구'), sub: '' };
+  }
+  function normStep(s) {
+    if (s && typeof s === 'object') {
+      return { ico: String(s.ico || '•'), verb: String(s.verb || ''), sub: String(s.sub || ''), at: s.at, dur: s.dur };
+    }
+    var str = String(s == null ? '' : s).trim();
+    var ico = '•';
+    for (var k = 0; k < STEP_ICONS.length; k++) {
+      if (str.indexOf(STEP_ICONS[k]) === 0) { ico = STEP_ICONS[k]; str = str.slice(STEP_ICONS[k].length).trim(); break; }
+    }
+    return { ico: ico, verb: str, sub: '', at: null, dur: null };
+  }
+  function stepText(s) {
+    var n = normStep(s);
+    return n.verb + (n.sub ? ' · ' + n.sub : '');
+  }
+  function stepDur(ms) {
+    var d = Number(ms || 0);
+    return d >= 1000 ? fmtSecs(d) : '';
+  }
+
   function workStart(t) {
     if (!t) return;
     if (!S.work) S.work = {};
     if (S.work[t.id]) { workTimerStart(); return; }
-    S.work[t.id] = { at: Date.now(), step: '🧠 답변 생각하는 중…', stepAt: Date.now(), steps: [], mark: t.messages.length };
+    S.work[t.id] = { at: Date.now(), step: { ico: '🧠', verb: '답변 생각하는 중', sub: '' }, stepAt: Date.now(), steps: [], mark: t.messages.length };
     workTimerStart();
     if (S.active === t.id) renderThread();
   }
-  function workStep(t, label) {
+  /* quiet=true: 지금 하는 일만 바꾸고 타임라인 기록엔 안 남겨요("결과로 답 만드는 중" 같은 되돌이 단계) */
+  function workStep(t, label, quiet, force) {
     if (!t) return;
     var w = S.work && S.work[t.id];
     if (!w || !label) return;
-    if (w.step === label) return;
-    if (w.step) w.steps.push({ label: w.step, at: w.stepAt, dur: Date.now() - w.stepAt });
-    w.step = label;
+    var s = normStep(label);
+    if (!s.verb && !s.sub) return;
+    if (!force && w.step && stepText(w.step) === stepText(s)) return;
+    if (w.step && w.step.verb && !w.stepQuiet) {
+      w.steps.push({ ico: w.step.ico, verb: w.step.verb, sub: w.step.sub, at: w.stepAt, dur: Date.now() - w.stepAt });
+    }
+    w.step = s;
+    w.stepQuiet = !!quiet;
     w.stepAt = Date.now();
     if (S.active === t.id) renderThread();
   }
+  /* 도구 결과를 받은 뒤 지금 단계의 이름만 결과까지 담아 고쳐 써요(단계를 새로 만들지 않음) */
+  function workRelabel(t, step) {
+    if (!t) return;
+    var w = S.work && S.work[t.id];
+    if (!w || !step) return;
+    var s = normStep(step);
+    if (!s.verb) return;
+    if (w.step && w.step.verb) {
+      s.at = w.stepAt; w.step = s; w.stepQuiet = false;
+    }
+    if (S.active === t.id) renderThread();
+  }
   function workLogHtml(w, liveStep) {
-    var base = Number(w.at) || 0;
     var h = '<div class="work-log">';
-    for (var i = 0; i < w.steps.length; i++) {
-      var s = w.steps[i] || {};
-      h += '<div class="w-line"><span class="w-t">+' + fmtElapsed((Number(s.at) || base) - base) + '</span>' +
-        '<span class="w-l">' + esc(s.label || '') + '</span>' +
-        '<span class="w-d">' + fmtSecs(s.dur || 0) + '</span></div>';
+    var steps = (w && w.steps) || [];
+    for (var i = 0; i < steps.length; i++) {
+      var s = normStep(steps[i]);
+      var d = stepDur(s.dur);
+      h += '<div class="w-line"><span class="w-ico" aria-hidden="true">' + esc(s.ico || '•') + '</span>' +
+        '<span class="w-body"><span class="w-verb">' + esc(s.verb) + '</span>' +
+        (s.sub ? '<span class="w-sub"> · ' + esc(s.sub) + '</span>' : '') + '</span>' +
+        (d ? '<span class="w-d">' + d + '</span>' : '') + '</div>';
     }
     if (liveStep) {
-      h += '<div class="w-line now"><span class="w-t">+' + fmtElapsed(Date.now() - base) + '</span>' +
-        '<span class="w-l">' + esc(liveStep) + '</span><span class="w-d">진행 중</span></div>';
+      var c = normStep(liveStep);
+      h += '<div class="w-line now"><span class="w-ico" aria-hidden="true">' + esc(c.ico === '•' ? '⏳' : c.ico) + '</span>' +
+        '<span class="w-body"><span class="w-verb">' + esc(c.verb) + '</span>' +
+        (c.sub ? '<span class="w-sub"> · ' + esc(c.sub) + '</span>' : '') + '</span>' +
+        '<span class="w-d">진행 중</span></div>';
     }
     return h + '</div>';
   }
@@ -3809,41 +3898,63 @@ var QR = (function () {
     var w = S.work && S.work[t.id];
     if (!w) return '';
     var open = !!S.workOpen[t.id];
-    return '<div class="work">' +
+    return '<div class="work' + (open ? ' open' : '') + '">' +
       '<button class="work-head" type="button" data-act="work-toggle" aria-expanded="' + (open ? 'true' : 'false') + '">' +
-      '<span aria-hidden="true">⚡</span><span>작업 중</span>' +
+      '<span aria-hidden="true">⚡</span><span class="w-txt">작업 중</span>' +
       '<span class="w-elapsed" id="workElapsed">⏱ ' + fmtElapsed(Date.now() - w.at) + '</span>' +
       '<span class="w-sep" aria-hidden="true">·</span>' +
-      '<span class="w-do" id="workDo">' + esc(w.step) + '</span>' +
-      '<span class="w-caret">' + (open ? '▴' : '▾') + '</span></button>' +
+      '<span class="w-do" id="workDo">' + esc(stepText(w.step || '')) + '</span>' +
+      '<span class="w-caret" aria-hidden="true">' + (open ? '▴' : '▾') + '</span></button>' +
       (open ? workLogHtml(w, w.step) : '') + '</div>';
   }
   function workDoneHtml(m) {
     var w = m && m.work;
     if (!w || !w.steps || !w.steps.length) return '';
     var open = !!(S.logOpen && S.logOpen[m.id]);
-    return '<div class="work done">' +
+    return '<div class="work done' + (open ? ' open' : '') + '">' +
       '<button class="work-head" type="button" data-act="work-log" data-id="' + esc(m.id) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
-      '<span aria-hidden="true">✅</span><span>작업 내역</span>' +
+      '<span aria-hidden="true">✅</span><span class="w-txt">작업 내역</span>' +
+      '<span class="w-sep" aria-hidden="true">·</span>' +
       '<span class="w-do">' + fmtSecs(Number(w.sec || 0) * 1000) + ' (' + w.steps.length + '단계)</span>' +
-      '<span class="w-caret">' + (open ? '▴' : '▾') + '</span></button>' +
-      (open ? workLogHtml({ at: w.at || 0, steps: w.steps }, '') : '') + '</div>';
+      '<span class="w-caret" aria-hidden="true">' + (open ? '▴' : '▾') + '</span></button>' +
+      (open ? workLogHtml({ at: w.at || 0, steps: w.steps }, null) : '') + '</div>';
   }
   function workFinish(t) {
     if (!t) return null;
     var w = S.work && S.work[t.id];
     if (!w) return null;
-    if (w.step) w.steps.push({ label: w.step, at: w.stepAt, dur: Date.now() - w.stepAt });
+    if (w.step && w.step.verb && !w.stepQuiet) {
+      w.steps.push({ ico: w.step.ico, verb: w.step.verb, sub: w.step.sub, at: w.stepAt, dur: Date.now() - w.stepAt });
+    }
+    /* 도구를 한 번도 안 쓴 답변(그냥 대화)에는 작업 내역 칩을 붙이지 않아요 — 화면이 깔끔해야 해서 */
+    var acted = false;
+    for (var q = 0; q < w.steps.length; q++) {
+      if (String(w.steps[q].ico || '') !== '🧠') { acted = true; break; }
+    }
     var target = null;
     for (var i = t.messages.length - 1; i >= 0 && i >= (w.mark || 0); i--) {
       var m = t.messages[i];
-      if (m.role === 'assistant' || m.role === 'tool') { target = m; break; }
+      if (m.role === 'assistant' && !m.nudge) { target = m; break; }
     }
-    if (!target && t.messages.length) target = t.messages[t.messages.length - 1];
-    if (target) target.work = { sec: Math.max(1, Math.round((Date.now() - w.at) / 1000)), steps: w.steps.slice(), at: w.at };
+    if (!target) {
+      for (var k = t.messages.length - 1; k >= 0; k--) {
+        if (t.messages[k].role === 'assistant' && !t.messages[k].nudge) { target = t.messages[k]; break; }
+      }
+    }
+    if (target && acted) target.work = { sec: Math.max(1, Math.round((Date.now() - w.at) / 1000)), steps: w.steps.slice(), at: w.at };
     delete S.work[t.id];
     workTimerStop();
     return target;
+  }
+
+  /* 도구가 남긴 짧은 안내 — 앞 세 줄까지만 */
+  function noteText(s) {
+    var t = String(s == null ? '' : s).replace(/\r/g, '');
+    var lines = t.split('\n');
+    var head = lines.slice(0, 3).join('\n');
+    if (lines.length > 3) head += '\n…';
+    if (head.length > 220) head = head.slice(0, 220) + '…';
+    return head;
   }
 
   function msgHtml(m) {
@@ -3851,11 +3962,15 @@ var QR = (function () {
       return '<div class="nudge">🔄 말로만 하지 말고 바로 실행하도록 한 번 더 요청했어요</div>';
     }
     if (m.role === 'tool') {
-      var t = '<div style="margin:6px 0 6px 36px;font-size:11.5px;font-weight:800;color:#8a83a0">' +
-        '🔧 ' + esc(m.label || m.tool || '도구') + '</div>';
-      if (m.card) t += '<div style="margin-left:36px">' + (m.card.kind === 'edit' ? editCardHtml(m.card) : writeCardHtml(m.card)) + '</div>';
-      if (m.text && !m.card) t += '<div style="margin-left:36px;font-size:12px;font-weight:700;color:#7c7590;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-width:80%;">' + esc(String(m.text).slice(0, 900)) + '</div>';
-      return t;
+      /* 생코드·데이터 원문은 본문에 쏟지 않아요. 카드(수정·저장 제안)와 짧은 안내만 보여 주고,
+         무슨 일을 했는지는 위 작업 내역(세로 타임라인)에서 확인해요. */
+      if (m.card) {
+        return '<div class="tool-card"><div class="tool-head">' + (m.card.kind === 'edit' ? '✏️' : '💾') + ' ' +
+          esc(m.label || m.tool || '도구') + '</div>' +
+          (m.card.kind === 'edit' ? editCardHtml(m.card) : writeCardHtml(m.card)) + '</div>';
+      }
+      if (m.quiet || !m.text) return '';
+      return '<div class="tool-note">' + esc(noteText(m.text)) + '</div>';
     }
     var me = m.role === 'user';
     var h = '<div class="msg ' + (me ? 'me' : 'bot') + '" data-mid="' + esc(m.id) + '">';
@@ -4041,7 +4156,10 @@ var QR = (function () {
     lines.push('');
     lines.push('[꼭 지킬 것]');
     lines.push('- 토큰을 아껴라. 파일을 통째로 읽거나 통째로 다시 쓰지 마라.');
-    lines.push('- 고칠 곳을 찾을 때: search_code로 위치(줄 번호)를 찾고 → read_code_slice로 그 근처 80~120줄만 읽고 → code_edit의 edits(찾아 바꾸기)로 바꾼다.');
+    lines.push('- 고칠 곳을 찾을 때: 대상 이름(함수·id·CSS 클래스)만으로 search_code → read_code_slice로 그 근처 80~200줄 → code_edit의 edits(찾아 바꾸기) 순서로 좁혀 간다.');
+    lines.push('- "function"·"div"·"script"처럼 흔한 낱말 하나로 넓게 찾지 마라. 결과가 수십 개면 쓸모가 없다. 고칠 대상의 이름을 그대로 넣어 찾고, 파일 이름(path)도 함께 좁혀라.');
+    lines.push('- 찾기·읽기가 같이 필요하면 같은 답변에 도구 호출을 여러 개 넣어 한 번에 처리해라. 그래야 단계를 아끼고 code_edit까지 빨리 간다.');
+    lines.push('- 정해진 단계 수(12번) 안에 끝내라. 10단계쯤에서 아직 못 찾았으면 읽은 내용으로 가장 좋은 수정을 내거나, 무엇이 막혔는지 짧게 말한다.');
     lines.push('- code_read는 200줄 이하의 작은 파일에만 쓴다. 650KB짜리 파일을 content로 통째로 쓰면 안 된다.');
     lines.push('- old_string은 파일에 있는 글자와 정확히 같아야 한다(공백·들여쓰기 포함). 찾지 못하면 search_code로 다시 확인한다.');
     lines.push('- 저장과 배포는 도현님이 [저장]·[반영하기]를 눌러야만 실제로 일어난다. 네가 눌렀다고 말하지 않는다.');
@@ -4140,8 +4258,8 @@ var QR = (function () {
     var nudged = false;
     workStart(t);
     try {
-    for (var step = 0; step < 5; step++) {
-      workStep(t, step === 0 ? '🧠 답변 생각하는 중…' : '🧠 결과로 답 만드는 중…');
+    for (var step = 0; step < 12; step++) {
+      workStep(t, step === 0 ? { ico: '🧠', verb: '답변 생각하는 중', sub: '' } : { ico: '🧠', verb: '결과로 답 만드는 중', sub: '' }, step !== 0);
       var msgs = buildHistory(t);
       if (attach && ((attach.images && attach.images.length) || (attach.pdfs && attach.pdfs.length))) {
         var lastMsg = msgs[msgs.length - 1];
@@ -4165,7 +4283,7 @@ var QR = (function () {
             renderModelBtn();
             if (!document.getElementById('modelModal').hidden) renderModelModal();
             toast('이 모델은 더 이상 쓸 수 없어 ' + modelShort(alt) + '(으)로 바꿨어요.');
-            workStep(t, '🔁 모델 전환 재시도 중…');
+            workStep(t, { ico: '🔁', verb: '모델 전환 재시도 중', sub: '' });
             return await runAssistant(t, attach);
           }
           if (alt) { S.pref.model = alt; savePref(); renderModelBtn(); }
@@ -4186,7 +4304,7 @@ var QR = (function () {
           nudged = true;
           addMsg(t, { role: 'assistant', text: res.text, model: id });
           addMsg(t, { role: 'user', text: '말로만 하지 말고 지금 바로 도구를 호출해 실행해 주세요.', nudge: true });
-          workStep(t, '🔁 다시 실행 요청 중…');
+          workStep(t, { ico: '🔁', verb: '다시 실행 요청 중', sub: '' });
           if (S.active === t.id) renderThread();
           S.scrollNext = true;
           saveSoon();
@@ -4210,16 +4328,17 @@ var QR = (function () {
         } else {
           /* 저장소 이름·경로가 전체 주소나 owner/repo로 와도 도구가 알아듣게 다듬어요 */
           var toolArgs = normalizeToolArgs(one.name, one.args || {});
-          workStep(t, actionLabel(one.name, toolArgs));
+          workStep(t, toolStep(one.name, toolArgs, null), false, true);
           try {
             out = await tool.run(toolArgs, { threadId: t.id });
           } catch (e) {
             out = { text: '도구를 실행하지 못했어요: ' + (e && e.message ? e.message : ''), label: '오류' };
           }
+          workRelabel(t, toolStep(one.name, toolArgs, out));
         }
-        addMsg(t, { role: 'tool', tool: one.name, label: out.label || one.name, text: out.text || '', card: out.card || null, callId: one.id || '' });
+        addMsg(t, { role: 'tool', tool: one.name, label: out.label || one.name, text: out.text || '', card: out.card || null, callId: one.id || '', quiet: !!out.quiet, info: out.info || null });
       }
-      workStep(t, '🧠 결과로 답 만드는 중…');
+      workStep(t, { ico: '🧠', verb: '결과로 답 만드는 중', sub: '' }, true);
       if (S.active === t.id) renderThread();
       S.scrollNext = true;
       saveSoon();
