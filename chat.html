@@ -347,6 +347,8 @@
   .gate-alt{ display:inline-block; margin:12px 0 0; border:0; background:none; padding:4px 6px; font-size:12.5px; font-weight:900; color:#6a5fc0; max-width:100%; white-space:normal; }
   .gate-paste{ display:inline-flex; align-items:center; justify-content:center; gap:5px; align-self:center; border:0; border-radius:11px; padding:8px 14px; font-size:12.5px; font-weight:900; background:#f2eefc; color:#6a45d8; }
   .gate-paste:active{ transform:scale(.97); }
+  .gate-or{ display:flex; align-items:center; gap:9px; margin:14px 0 4px; font-size:11px; font-weight:900; color:#a79fbb; }
+  .gate-or:before, .gate-or:after{ content:''; flex:1 1 auto; height:1px; background:#f1ebf9; }
   .totp-qr{ display:flex; justify-content:center; margin:10px 0 12px; }
   .totp-qr svg{ width:208px; height:208px; border-radius:14px; border:1.5px solid #f0ebff; background:#fff; padding:6px; }
   .totp-key{ display:flex; align-items:center; gap:8px; background:#fbf9ff; border:1.5px solid #f0ebff; border-radius:12px; padding:9px 11px; margin:0 0 10px; }
@@ -616,6 +618,10 @@
   var PATH_AI = 'config/ai.json';
   var PATH_DEVICES = 'config/trusted-devices.json';
 
+  /* 생체인증(Face ID · 지문) — 등록한 기기의 localStorage에만 둬요. 어디에도 올리지 않아요. */
+  var K_BIO = 'jaden_chat_bio_v1_';
+  var K_BIO_WRAP = 'jaden_chat_bio_wrap_v1_';
+
   /* 2차 인증(구글 인증 앱 · 아이폰 암호) */
   var K_TOTP_SEEN = 'kidsDashboard.chat.totp.v1';
   var TOTP_PERIOD = 30;      /* 초 */
@@ -662,6 +668,8 @@
     totpSetup: null,
     totpMsg: '',
     totpOff: false,
+    bioMsg: '',
+    bioBusy: false,
     dead: {},
     personaSel: '',
     settingsMsg: '',
@@ -1677,6 +1685,7 @@ var QR = (function () {
     }
     S.unlocked = true;
     touchActivity();
+    await bioRefreshKey();
     if (S.gateMode === 'device') {
       var reg = await registerDevice(deviceName);
       if (!reg.ok) toast('기기 등록을 저장하지 못했어요. 다음에 다시 확인할게요.');
@@ -1726,6 +1735,231 @@ var QR = (function () {
     }
     el.value = digits;
     await submitGateTotp();
+  }
+
+  /* ============ 생체인증 (Face ID · 지문) — 이 기기에서만 ============ */
+  /* 이 브라우저가 생체인증(WebAuthn)을 쓸 수 있는지 */
+  function hasBiometricSupport() {
+    return !!(window.PublicKeyCredential && navigator.credentials
+      && typeof navigator.credentials.create === 'function'
+      && typeof navigator.credentials.get === 'function'
+      && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1'));
+  }
+  function b64urlEnc(buf) {
+    return b64enc(buf).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function b64urlDec(txt) {
+    var s = String(txt || '').replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    return b64dec(s);
+  }
+  function bioUserId() { return String((S.me && S.me.id) || ''); }
+  function bioStoreKey() { return K_BIO + bioUserId(); }
+  function bioWrapKeyName() { return K_BIO_WRAP + bioUserId(); }
+
+  /* 이 기기에 등록해 둔 생체인증 정보. 없거나 망가졌으면 null */
+  function getBioRecord() {
+    var id = bioUserId();
+    if (!id) return null;
+    var raw = lsGet(bioStoreKey());
+    if (!raw) return null;
+    var rec = null;
+    try { rec = JSON.parse(raw); } catch (e) { return null; }
+    if (!rec || typeof rec !== 'object' || !rec.credIdB64 || !rec.wrappedKey || !rec.iv) return null;
+    if (rec.userId && String(rec.userId) !== id) return null;
+    return rec;
+  }
+  function saveBioRecord(rec) {
+    var id = bioUserId();
+    if (!id || !rec) return false;
+    rec.version = 1;
+    rec.userId = id;
+    rec.updatedAt = nowIso();
+    return lsSet(bioStoreKey(), JSON.stringify(rec));
+  }
+  function clearBioRecord() {
+    lsDel(bioStoreKey());
+    lsDel(bioWrapKeyName());
+  }
+  function bioLabel() {
+    var ua = String(navigator.userAgent || '');
+    if (/iPhone|iPad|iPod/.test(ua)) return 'Face ID · Touch ID';
+    if (/Macintosh/.test(ua)) return 'Touch ID';
+    if (/Android/.test(ua)) return '지문 · 얼굴';
+    if (/Windows/.test(ua)) return 'Windows Hello';
+    return 'Face ID / 지문';
+  }
+  function bioAad() { return new TextEncoder().encode('bio:' + bioUserId()); }
+
+  /* 대화 열쇠를 이 기기에서만 쓰는 열쇠로 감싸 둠 (감싸는 열쇠도 이 기기에만) */
+  async function bioWrapChatKey(key) {
+    var sub = subtle();
+    if (!sub) throw new Error('이 브라우저에서는 생체인증을 쓸 수 없어요');
+    var raw = new Uint8Array(await sub.exportKey('raw', key));
+    var local = window.crypto.getRandomValues(new Uint8Array(32));
+    if (!lsSet(bioWrapKeyName(), b64enc(local))) throw new Error('이 기기에 저장하지 못했어요');
+    var kek = await sub.importKey('raw', local, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    var iv = window.crypto.getRandomValues(new Uint8Array(12));
+    var ct = await sub.encrypt({ name: 'AES-GCM', iv: iv, additionalData: bioAad() }, kek, raw);
+    return { iv: b64enc(iv), wrappedKey: b64enc(ct) };
+  }
+  async function bioUnwrapChatKey(rec) {
+    var sub = subtle();
+    if (!sub) throw new Error('이 브라우저에서는 생체인증을 쓸 수 없어요');
+    var localB64 = lsGet(bioWrapKeyName());
+    if (!localB64) throw new Error('이 기기에 등록한 열쇠가 없어요');
+    var kek = await sub.importKey('raw', b64dec(localB64), { name: 'AES-GCM' }, false, ['decrypt']);
+    var raw = await sub.decrypt({ name: 'AES-GCM', iv: b64dec(rec.iv), additionalData: bioAad() }, kek, b64dec(rec.wrappedKey));
+    return sub.importKey('raw', new Uint8Array(raw), { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
+  }
+
+  /* 비밀번호·6자리 번호로 열었을 때도 이 기기의 생체인증 열쇠를 지금 열쇠에 맞춰 조용히 맞춰 둬요 */
+  async function bioRefreshKey() {
+    try {
+      var rec = getBioRecord();
+      if (!rec || !S.chatKey || !bioUserId()) return false;
+      var w = await bioWrapChatKey(S.chatKey);
+      rec.iv = w.iv;
+      rec.wrappedKey = w.wrappedKey;
+      rec.chatSalt = S.chatSalt ? b64enc(S.chatSalt) : '';
+      rec.chatIter = S.chatIter;
+      return saveBioRecord(rec);
+    } catch (e) { return false; }
+  }
+
+  /* 등록: 지금 이 기기의 얼굴·지문을 한 번 확인하고 대화 열쇠를 이 기기에만 맡겨 둬요 */
+  async function bioRegister() {
+    if (S.bioBusy) return;
+    if (!hasBiometricSupport()) {
+      S.bioMsg = '이 브라우저에서는 생체인증을 쓸 수 없어요. https 주소이거나 홈 화면에 추가한 앱에서 열어 주세요.';
+      renderSettings();
+      return;
+    }
+    if (!S.chatKey || !S.me) {
+      S.bioMsg = '대화를 연 뒤에 생체인증을 등록해 주세요.';
+      renderSettings();
+      return;
+    }
+    S.bioBusy = true;
+    S.bioMsg = '생체인증을 등록하는 중…';
+    renderSettings();
+    try {
+      var cred = await navigator.credentials.create({ publicKey: {
+        challenge: window.crypto.getRandomValues(new Uint8Array(32)),
+        rp: { name: "Jaden's Home", id: location.hostname || 'localhost' },
+        user: {
+          id: new TextEncoder().encode(String(S.me.id || 'user')),
+          name: String(S.me.id || 'user'),
+          displayName: String(S.me.name || S.me.id || 'Jaden')
+        },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+        timeout: 60000
+      } });
+      if (!cred || !cred.rawId) throw new Error('이 기기가 생체인증을 받아 주지 않았어요');
+      var w = await bioWrapChatKey(S.chatKey);
+      var rec = {
+        credIdB64: b64urlEnc(cred.rawId),
+        createdAt: nowIso(),
+        label: bioLabel(),
+        alg: 'AES-GCM',
+        iv: w.iv,
+        wrappedKey: w.wrappedKey,
+        chatSalt: S.chatSalt ? b64enc(S.chatSalt) : '',
+        chatIter: S.chatIter
+      };
+      if (!saveBioRecord(rec)) throw new Error('이 기기에 저장하지 못했어요. 인터넷 창의 저장 공간이 가득 찼는지 확인해 주세요.');
+      S.bioMsg = '';
+      toast('Face ID / 생체인증이 등록됐어요!');
+    } catch (e) {
+      var nm = String((e && e.name) || '');
+      S.bioMsg = (nm === 'NotAllowedError' || nm === 'AbortError')
+        ? '생체인증 등록이 취소됐어요.'
+        : (nm === 'InvalidStateError'
+          ? '이 기기에 이미 생체인증이 등록되어 있어요. 기기 설정에서 지운 뒤 다시 해 주세요.'
+          : '생체인증을 등록하지 못했어요.' + (e && e.message ? ' ' + e.message : ''));
+      toast(S.bioMsg);
+    } finally {
+      S.bioBusy = false;
+      renderSettings();
+    }
+  }
+
+  /* 해제: 이 기기에서만 지워요. 다음부터는 비밀번호나 6자리 번호로 열어요. */
+  function bioRemove() {
+    clearBioRecord();
+    S.bioMsg = '이 기기에서 생체인증을 해제했어요. 이제 비밀번호나 6자리 번호로 열어요.';
+    renderSettings();
+    toast('이 기기 생체인증을 해제했어요.');
+  }
+
+  /* 잠금 화면 맨 위의 ‘생체인증으로 열기’ */
+  function bioGateHtml() {
+    if (!hasBiometricSupport() || !getBioRecord()) return '';
+    return '<button class="gate-btn" type="button" id="gateBioBtn" data-act="gate-bio" style="margin-bottom:10px">🔐 Face ID / 생체인증으로 열기</button>' +
+      '<div class="gate-or">또는 직접 입력</div>';
+  }
+
+  async function gateBioUnlock() {
+    if (S.gateBusy) return;
+    var rec = getBioRecord();
+    if (!rec || !hasBiometricSupport()) {
+      gateFail('이 기기에서는 생체인증을 쓸 수 없어요. 아래 번호나 비밀번호로 열어 주세요.');
+      return;
+    }
+    var btn = document.getElementById('gateBioBtn');
+    var opened = false;
+    S.gateBusy = true;
+    if (btn) { btn.disabled = true; btn.textContent = '생체인증 확인 중…'; }
+    try {
+      var cred = await navigator.credentials.get({ publicKey: {
+        challenge: window.crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ id: b64urlDec(rec.credIdB64), type: 'public-key' }],
+        userVerification: 'required',
+        timeout: 60000
+      } });
+      if (!cred) throw new Error('생체인증을 확인하지 못했어요');
+      var key = null;
+      try { key = await bioUnwrapChatKey(rec); }
+      catch (eu) {
+        gateFail('생체인증은 확인했지만 대화 열쇠가 바뀌어 있어요. 아래 비밀번호나 번호로 열고 설정에서 생체인증을 다시 등록해 주세요.');
+        return;
+      }
+      S.chatKey = key;
+      S.chatSalt = rec.chatSalt ? b64dec(rec.chatSalt) : window.crypto.getRandomValues(new Uint8Array(16));
+      S.chatIter = clamp(Number(rec.chatIter) || CHAT_ITER, 1000, 1000000);
+
+      var envRes = await readThreadsEnvelope();
+      if (!envRes.ok) { S.chatKey = null; gateFail(envRes.error || '대화 보관함을 확인하지 못했어요.'); return; }
+      if (envRes.env) {
+        S.chatSalt = b64dec(envRes.env.salt);
+        S.chatIter = clamp(Number(envRes.env.iter) || CHAT_ITER, 1000, 1000000);
+        try { await chatDecrypt(envRes.env); }
+        catch (ed) {
+          S.chatKey = null;
+          gateFail('대화를 열지 못했어요. 비밀번호나 6자리 번호로 열고 설정에서 생체인증을 다시 등록해 주세요.');
+          return;
+        }
+      }
+      S.unlocked = true;
+      touchActivity();
+      if (S.gateMode === 'device') {
+        var reg = await registerDevice(fieldVal('gateDevName') || S.deviceName);
+        if (!reg.ok) toast('기기 등록을 저장하지 못했어요. 다음에 다시 확인할게요.');
+      }
+      await bioRefreshKey();
+      opened = true;
+      await enterChat();
+    } catch (e) {
+      if (!opened) S.chatKey = null;
+      var nm = String((e && e.name) || '');
+      if (nm === 'NotAllowedError' || nm === 'AbortError') gateFail('생체인증이 취소됐어요. 아래 번호나 비밀번호로 열 수 있어요.');
+      else gateFail('생체인증으로 열지 못했어요. 아래 번호나 비밀번호로 열 수 있어요.');
+    } finally {
+      S.gateBusy = false;
+      var b2 = document.getElementById('gateBioBtn');
+      if (b2) { b2.disabled = false; b2.textContent = '🔐 Face ID / 생체인증으로 열기'; }
+    }
   }
 
   /* ============ 등록된 기기 ============ */
@@ -3404,13 +3638,15 @@ var QR = (function () {
     }
     var deviceMode = (mode === 'device');
     var totpOn = !!(S.totp && S.totp.enabled && S.totp.cfg);
+    /* 이 기기에 생체인증을 등록해 두었으면 맨 위에 ‘생체인증으로 열기’를 둬요 */
+    var bioTop = bioGateHtml();
 
     /* 2차 인증을 켰으면 6자리 번호만으로 열어요 */
     if (totpOn && !S.gateAlt) {
       sub.textContent = deviceMode
         ? '처음 보는 기기예요. 인증 앱의 6자리 번호로 확인하면 이 기기를 등록해요.'
         : '인증 앱(구글 인증 앱·아이폰 암호)의 6자리 번호를 넣어 주세요.';
-      body.innerHTML =
+      body.innerHTML = bioTop +
         '<form class="gate-form" id="gateTotpForm" autocomplete="on">' +
         /* 아이폰 ‘암호’ 앱이 이 사이트에 저장된 6자리 번호를 찾을 수 있게 아이디를 함께 둬요 (화면에는 안 보여요) */
         '<input class="gate-hide-user" type="text" name="username" autocomplete="username" value="' + esc(S.me ? S.me.id : '') + '" readonly tabindex="-1" aria-hidden="true">' +
@@ -3424,7 +3660,7 @@ var QR = (function () {
           ? '등록된 기기는 설정에서 언제든 해제할 수 있어요.'
           : '번호는 30초마다 새로 바뀌어요. 인증 앱을 열면 바로 나와요.') + '</p>';
       var tEl = document.getElementById('gateTotp');
-      if (tEl) { try { tEl.focus(); } catch (e) { /* 무시 */ } }
+      if (tEl && !bioTop) { try { tEl.focus(); } catch (e) { /* 무시 */ } }
       return;
     }
 
@@ -3437,7 +3673,7 @@ var QR = (function () {
     var loadNote = (S.totp && S.totp.ok === false)
       ? '<p class="gate-note" style="color:#b93b57">2차 인증 상태를 확인하지 못했어요. 비밀번호로 열 수 있어요.</p>'
       : '';
-    body.innerHTML =
+    body.innerHTML = bioTop +
       '<form class="gate-form" id="gateForm" autocomplete="off">' +
       (deviceMode ? '<label>이 기기 이름<input id="gateDevName" maxlength="40" value="' + esc(S.deviceName) + '" spellcheck="false"></label>' : '') +
       '<label>관리자 비밀번호<input id="gatePw" type="password" maxlength="64" autocomplete="current-password" placeholder="비밀번호"></label>' +
@@ -3447,7 +3683,7 @@ var QR = (function () {
         ? '등록된 기기는 설정에서 언제든 해제할 수 있어요.'
         : '비밀번호는 대화를 잠그는 열쇠로만 쓰고, 어디에도 저장하지 않아요.') + '</p>';
     var el = document.getElementById('gatePw');
-    if (el) { try { el.focus(); } catch (e) { /* 무시 */ } }
+    if (el && !bioTop) { try { el.focus(); } catch (e) { /* 무시 */ } }
   }
 
   function gateFail(text, ok) {
@@ -3509,6 +3745,7 @@ var QR = (function () {
       touchActivity();
       /* 비밀번호로 열었으니 2차 인증 열쇠도 지금 열쇠에 맞춰 조용히 맞춰 둬요 */
       if (S.totp && S.totp.enabled) await rewrapTotpKey();
+      await bioRefreshKey();
 
       if (S.gateMode === 'device') {
         var reg = await registerDevice(name);
@@ -4738,6 +4975,27 @@ var QR = (function () {
     if (S.totpMsg) h += '<p class="hint" style="color:#4a3a86;font-weight:900;margin-top:8px">' + esc(S.totpMsg) + '</p>';
     h += '</div>';
 
+    /* ---- 생체인증 (Face ID · 지문) ---- */
+    h += '<div class="sec" id="bioSec"><h3>🔓 생체인증 (Face ID · 지문)</h3>';
+    if (!hasBiometricSupport()) {
+      h += '<p class="hint">이 브라우저에서는 생체인증을 쓸 수 없어요. https 주소이거나 홈 화면에 추가한 앱에서 열면 쓸 수 있어요.</p>';
+    } else {
+      var brec = getBioRecord();
+      if (brec) {
+        h += '<p class="hint">이 기기에서는 Face ID(또는 지문) 한 번으로 대화를 열 수 있어요. 비밀번호와 6자리 번호도 그대로 쓸 수 있어요.</p>' +
+          '<div class="mrow on"><div class="mi"><b>이 기기 · ' + esc(brec.label || 'Face ID / 생체인증') + '</b>' +
+          '<span>' + esc((brec.createdAt ? fmtWhen(brec.createdAt) + ' 등록' : '등록됨') + ' · 이 기기에만 저장') + '</span></div>' +
+          '<span class="badge">✅ 등록됨</span></div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">' +
+          '<button class="btn ghost" type="button" data-act="bio-remove">🗑️ 이 기기 생체인증 해제</button></div>';
+      } else {
+        h += '<p class="hint">이 기기의 Face ID(또는 지문)로 대화를 열 수 있게 해 둬요. 열쇠는 이 기기에만 저장하고 다른 곳에는 보내지 않아요.</p>' +
+          '<button class="btn" type="button" data-act="bio-register">🔐 이 기기 Face ID / 생체인증 등록</button>';
+      }
+      if (S.bioMsg) h += '<p class="hint" style="color:#4a3a86;font-weight:900;margin-top:8px">' + esc(S.bioMsg) + '</p>';
+    }
+    h += '</div>';
+
     var alCur = autoLockMins();
     h += '<div class="sec" id="autoLockSec"><h3>🔐 내 대화 · 자동 잠금</h3>' +
       '<p class="hint">이 화면에 들어오거나 새로 고칠 때마다 잠금을 풀어야 해요. 대화는 내 계정 비밀번호로만 열리고, 잠그면 이 기기 메모리에서도 바로 지워져요.</p>' +
@@ -5008,6 +5266,9 @@ var QR = (function () {
     if (act === 'totp-off-open') { S.totpOff = true; S.totpMsg = ''; renderSettings(); return; }
     if (act === 'totp-off-cancel') { S.totpOff = false; S.totpMsg = ''; renderSettings(); return; }
     if (act === 'totp-off-confirm') { totpDisableSubmit(); return; }
+    if (act === 'bio-register') { bioRegister(); return; }
+    if (act === 'bio-remove') { bioRemove(); return; }
+    if (act === 'gate-bio') { gateBioUnlock(); return; }
     if (act === 'model-open') { openModelModal(); return; }
     if (act === 'persona-open') { openPersona(); return; }
     if (act === 'persona-close') { closePersona(); return; }
