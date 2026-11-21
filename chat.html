@@ -2888,7 +2888,10 @@
       return;
     }
     if (act === 'save-keys') { saveKeys(false); return; }
-    if (act === 'clear-keys') { saveKeys(true); return; }
+    if (act === 'clear-keys') {
+      if (!window.confirm('가족이 함께 쓰는 AI 키를 모두 지울까요? 냉파·가계부의 AI 추천도 함께 멈춰요.')) return;
+      saveKeys(true); return;
+    }
     if (act === 'save-code') { saveCodeToken(); return; }
     if (act === 'save-instructions') { saveInstructions(); return; }
     if (act === 'quick-add') { addQuick(); return; }
