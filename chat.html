@@ -269,6 +269,8 @@
   .gate-btn[disabled]{ opacity:.6; }
   .gate-link{ display:inline-block; margin-top:14px; font-size:12.5px; font-weight:900; color:#6a5fc0; text-decoration:none; max-width:100%; white-space:normal; }
   .gate-alt{ display:inline-block; margin:12px 0 0; border:0; background:none; padding:4px 6px; font-size:12.5px; font-weight:900; color:#6a5fc0; max-width:100%; white-space:normal; }
+  .gate-paste{ display:inline-flex; align-items:center; justify-content:center; gap:5px; align-self:center; border:0; border-radius:11px; padding:8px 14px; font-size:12.5px; font-weight:900; background:#f2eefc; color:#6a45d8; }
+  .gate-paste:active{ transform:scale(.97); }
   .totp-qr{ display:flex; justify-content:center; margin:10px 0 12px; }
   .totp-qr svg{ width:208px; height:208px; border-radius:14px; border:1.5px solid #f0ebff; background:#fff; padding:6px; }
   .totp-key{ display:flex; align-items:center; gap:8px; background:#fbf9ff; border:1.5px solid #f0ebff; border-radius:12px; padding:9px 11px; margin:0 0 10px; }
@@ -331,12 +333,18 @@
   }
   .lock-opts button.on{ background:linear-gradient(135deg,#7b5cf0,#5b8def); color:#fff; box-shadow:0 3px 10px rgba(106,69,216,.28); }
   .lock-opts button:active{ transform:scale(.97); }
+  /* 긴 오류 문구가 화면 절반을 덮는 큰 검은 원이 되지 않게 폭·높이를 꼭 잡아 둬요 */
   .toast{
     position:fixed; left:50%; bottom:calc(26px + env(safe-area-inset-bottom,0px)); transform:translate(-50%,20px);
-    background:#26203a; color:#fff; padding:11px 17px; border-radius:999px; font-size:13px; font-weight:900;
-    box-shadow:0 14px 32px rgba(38,32,58,.3); opacity:0; pointer-events:none; transition:.22s; z-index:120; max-width:88vw; text-align:center;
+    background:#26203a; color:#fff; padding:10px 14px; border-radius:14px; font-size:12.5px; font-weight:800; line-height:1.45;
+    box-shadow:0 14px 32px rgba(38,32,58,.3); opacity:0; pointer-events:none; transition:.22s; z-index:120;
+    max-width:min(320px, calc(100vw - 32px)); width:max-content; text-align:center;
+    word-break:break-word; overflow-wrap:anywhere;
+    display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; overflow:hidden;
+    max-height:calc(12.5px * 1.45 * 4 + 20px);
   }
   .toast.show{ opacity:1; transform:translate(-50%,0); }
+  .nudge{ margin:2px 0 6px 36px; font-size:11px; font-weight:800; color:#8a83a0; }
   .empty-lock{ font-size:12px; font-weight:800; color:#a79fbb; }
 
   @media (min-width: 900px){
@@ -622,7 +630,7 @@
     var el = document.getElementById('toast');
     if (!el) return;
     var msg = String(text == null ? '' : text);
-    if (msg.length > 150) msg = msg.slice(0, 147) + '…';
+    if (msg.length > 140) msg = msg.slice(0, 137) + '…';
     el.textContent = msg;
     /* 입력창(붙인 파일 칩 포함) 바로 위에 띄워요 — 설정 창이 열려 있으면 창을 가리지 않게 아래쪽에 */
     var modal = null;
@@ -634,7 +642,6 @@
     try {
       if (modal) {
         el.style.bottom = 'calc(18px + env(safe-area-inset-bottom,0px))';
-        el.style.maxWidth = '78vw';
       } else {
         el.style.maxWidth = '';
         var comp = document.querySelector('.composer');
@@ -1572,6 +1579,25 @@ var QR = (function () {
     }
   }
 
+  async function pasteGateTotp() {
+    var el = document.getElementById('gateTotp');
+    if (!el || S.gateBusy) return;
+    var txt = '';
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) txt = await navigator.clipboard.readText();
+    } catch (e) { txt = ''; }
+    var digits = String(txt || '').replace(/\D/g, '');
+    if (digits.length > 6) digits = digits.slice(0, 6);
+    if (digits.length < 6) {
+      try { el.focus(); } catch (e2) { /* 무시 */ }
+      if (digits) el.value = digits;
+      toast('복사한 6자리 번호를 찾지 못했어요. 인증 앱에서 번호를 복사한 뒤 다시 눌러 주세요.');
+      return;
+    }
+    el.value = digits;
+    await submitGateTotp();
+  }
+
   /* ============ 등록된 기기 ============ */
   async function loadDevices() {
     var r = await ghGetJson(DEFAULT_REPO, PATH_DEVICES, null);
@@ -2045,9 +2071,38 @@ var QR = (function () {
   }
   /* 404·단종·지워진 모델 오류인지 */
   function isDeadModelError(status, error) {
-    if (Number(status) === 404) return true;
     var e = String(error || '');
-    return /no longer available|not found|does not exist|decommissioned|deprecated|unsupported model|is not supported|지원하지 않는|더 이상 (쓸|사용)/i.test(e);
+    /* 함수 도구(tools) 미지원 오류는 모델이 없어진 게 아니에요 */
+    if (/tool[_ ]?choice|tool[_ ]?calls?|\btools\b/i.test(e) && /support/i.test(e)) return false;
+    if (Number(status) === 404) return true;
+    /* 약관 동의가 필요하거나 남은 한도가 0인 모델도 고를 수 없는 모델이에요 */
+    return /no longer available|not found|does not exist|decommissioned|deprecated|unsupported model|is not supported|지원하지 않는|더 이상 (쓸|사용)|requires?\s+(the\s+)?terms?\s+acceptance|accept\s+the\s+terms?|limit\s*[:=]\s*0(?![\d.])/i.test(e);
+  }
+  /* 이 모델이 함수 도구(tools) 자체를 받지 못할 때 */
+  function isNoToolSupportError(status, error) {
+    if (Number(status) !== 400 && Number(status) !== 404 && Number(status) !== 422) return false;
+    var e = String(error || '');
+    if (!/tool/i.test(e)) return false;
+    return /not support|unsupport|does not support|doesn't support|isn't supported|not allowed|not available|unknown field|invalid_request_error|unrecognized/i.test(e);
+  }
+  /* 모델별로 “도구를 못 받는 모델”을 기억해 둬요 (매번 400으로 실패하지 않게) */
+  function loadNoTools() {
+    if (S.noTools) return S.noTools;
+    var j = null;
+    try { j = JSON.parse(lsGet('kidsDashboard.chat.notools.v1') || '{}'); } catch (e) { j = null; }
+    S.noTools = (j && typeof j === 'object') ? j : {};
+    return S.noTools;
+  }
+  function noToolsModel(id) {
+    if (!id) return false;
+    return !!loadNoTools()[id];
+  }
+  function markNoToolsModel(id) {
+    if (!id) return;
+    var o = loadNoTools();
+    if (o[id]) return;
+    o[id] = nowIso();
+    try { lsSet('kidsDashboard.chat.notools.v1', JSON.stringify(o)); } catch (e) { /* 무시 */ }
   }
   /* 지금 쓸 수 있는 다음 모델 (같은 제공자 먼저, 그다음 다른 제공자) */
   function nextUsableModel(badId) {
@@ -2279,32 +2334,60 @@ var QR = (function () {
         }
         msgs.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: content });
       }
-      var body = { model: model, messages: msgs, temperature: 0.5 };
-      if (opts && opts.maxTokens) body.max_tokens = opts.maxTokens;
       var headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key };
       for (var k in extraHeaders) if (Object.prototype.hasOwnProperty.call(extraHeaders, k)) headers[k] = extraHeaders[k];
-      var res, txt = '';
-      try {
-        res = await window.fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body), signal: (opts && opts.signal) || undefined });
-        txt = await res.text();
-      } catch (e) {
-        return { ok: false, status: 0, error: '네트워크에 연결하지 못했어요', headers: {} };
+      var mid = modelIdOf(pid, model);
+      var withTools = !(opts && opts.noTools) && !noToolsModel(mid);
+      function send(useTools) {
+        var body = { model: model, messages: msgs, temperature: 0.5 };
+        if (opts && opts.maxTokens) body.max_tokens = opts.maxTokens;
+        /* 말로만 “찾아볼게요” 하지 않고 실제로 도구를 부르도록 함수 도구를 함께 보내요 */
+        if (useTools) { body.tools = openaiTools(); body.tool_choice = 'auto'; }
+        return window.fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body), signal: (opts && opts.signal) || undefined })
+          .then(function (r) { return r.text().then(function (t) { return { res: r, txt: t, tools: useTools }; }); });
       }
-      var hmap = headerMap(res);
+      var got;
+      try { got = await send(withTools); }
+      catch (e) { return { ok: false, status: 0, error: '네트워크에 연결하지 못했어요', headers: {} }; }
+      var hmap = headerMap(got.res);
       var json = null;
-      try { json = JSON.parse(txt); } catch (e) { json = null; }
-      noteResult(pid, model, res.status, hmap, txt);
-      if (!res.ok) return { ok: false, status: res.status, error: textFromErr(res.status, json, 'HTTP ' + res.status), headers: hmap, body: txt };
-      var out = '';
+      try { json = JSON.parse(got.txt); } catch (e) { json = null; }
+      noteResult(pid, model, got.res.status, hmap, got.txt);
+      var errMsg = got.res.ok ? '' : textFromErr(got.res.status, json, 'HTTP ' + got.res.status);
+      /* 이 모델이 함수 도구를 지원하지 않으면 이 모델만 도구 없이 한 번 더 시도해요 */
+      if (!got.res.ok && got.tools && isNoToolSupportError(got.res.status, errMsg)) {
+        markNoToolsModel(mid);
+        try { got = await send(false); }
+        catch (e2) { return { ok: false, status: 0, error: '네트워크에 연결하지 못했어요', headers: {} }; }
+        hmap = headerMap(got.res);
+        json = null;
+        try { json = JSON.parse(got.txt); } catch (e3) { json = null; }
+        noteResult(pid, model, got.res.status, hmap, got.txt);
+        errMsg = got.res.ok ? '' : textFromErr(got.res.status, json, 'HTTP ' + got.res.status);
+      }
+      if (!got.res.ok) return { ok: false, status: got.res.status, error: errMsg, headers: hmap, body: got.txt };
+      var out = '', calls = [];
       try {
         var c = json.choices[0];
-        out = (c && c.message && c.message.content) || '';
+        var msg = (c && c.message) || {};
+        out = msg.content || '';
         if (Object.prototype.toString.call(out) === '[object Array]') {
           out = out.map(function (p) { return (p && p.text) || ''; }).join('');
         }
+        var tc = msg.tool_calls;
+        if (Object.prototype.toString.call(tc) === '[object Array]') {
+          for (var n = 0; n < tc.length && n < 4; n++) {
+            var fn = (tc[n] && tc[n].function) || {};
+            var args = {};
+            try { args = JSON.parse(fn.arguments || '{}'); } catch (e4) { args = {}; }
+            if (!args || typeof args !== 'object') args = {};
+            if (fn.name) calls.push({ id: String((tc[n] && tc[n].id) || ''), name: String(fn.name), args: args });
+          }
+        }
       } catch (e) { out = ''; }
-      if (!String(out).trim()) return { ok: false, status: res.status, error: '빈 답변이 왔어요', headers: hmap, body: txt };
-      return { ok: true, status: res.status, text: String(out), headers: hmap };
+      /* 도구를 부른 답변은 본문이 비어 있는 게 정상이에요 */
+      if (!String(out).trim() && !calls.length) return { ok: false, status: got.res.status, error: '빈 답변이 왔어요', headers: hmap, body: got.txt };
+      return { ok: true, status: got.res.status, text: String(out), toolCalls: calls, headers: hmap };
     };
   }
 
@@ -2321,7 +2404,7 @@ var QR = (function () {
       var methods = m.supportedGenerationMethods || [];
       if (methods.indexOf('generateContent') < 0) continue;
       if (!/^gemini-/.test(id)) continue;
-      if (/(image|tts|live|transcribe|embedding|translate|omni|audio|robotics|computer-use|vision-last)/i.test(id)) continue;
+      if (/(image|tts|live|transcribe|embedding|translate|omni|audio|robotics|computer-use|vision-last|nano-banana|imagen|veo|aqa)/i.test(id)) continue;
       /* 단종된 옛 모델(1.x·2.0·2.5)은 목록에 올리지 않아요 */
       if (/^gemini-(1\.|2\.0|2\.5)/i.test(id)) continue;
       ids.push(id);
@@ -2342,12 +2425,14 @@ var QR = (function () {
       for (var i = 0; i < list.length; i++) {
         var id = String(list[i] && list[i].id || '');
         if (!id) continue;
-        if (/:free$/.test(id)) out.push(id);
+        if (/:free$/.test(id) && !NON_CHAT_MODEL_RE.test(id)) out.push(id);
       }
       out.sort();
       return out;
     } catch (e) { return []; }
   }
+  /* 대화용이 아닌 모델(음성·그림 생성·가드·임베딩)은 목록에서 빼요 */
+  var NON_CHAT_MODEL_RE = /(orpheus|whisper|tts|playai|guard|safeguard|embed|nano-banana|imagen|veo|dall-e|flux|stable-diffusion|sdxl|moderation|rerank)/i;
   async function groqModels() {
     var key = providerKey('groq');
     if (!key) return [];
@@ -2359,7 +2444,7 @@ var QR = (function () {
       for (var i = 0; i < list.length; i++) {
         var id = String(list[i] && list[i].id || '');
         if (!id) continue;
-        if (/(whisper|tts|guard|embed)/i.test(id)) continue;
+        if (NON_CHAT_MODEL_RE.test(id)) continue;
         out.push(id);
       }
       return out;
@@ -2661,6 +2746,84 @@ var QR = (function () {
     }
   ];
 
+  /* ============ OpenAI 형식 함수 도구 (Groq·OpenRouter) ============ */
+  /* 도구별 인자 설명 — 모델이 제대로 된 이름·인자를 넣도록 좁혀 줘요 */
+  var TOOL_SCHEMAS = {
+    family_data: {
+      kind: { type: 'string', enum: ['fridge', 'recipes', 'ledger', 'kids', 'summary', 'files', 'read'], description: '무엇을 읽을지' },
+      path: { type: 'string', description: '읽을 파일 경로 (kind=read·files일 때)' }
+    },
+    family_save: {
+      path: { type: 'string', description: '예: fridge/inventory.json' },
+      data: { type: 'object', description: '저장할 JSON 전체', additionalProperties: true },
+      reason: { type: 'string', description: '왜 바꾸는지' }
+    },
+    code_list: {
+      repo: { type: 'string', enum: ['home', 'kids-dashboard', 'fridge-dashboard', 'ledger-dashboard'] },
+      path: { type: 'string', description: '비우면 최상위' }
+    },
+    search_code: {
+      repo: { type: 'string', enum: ['home', 'kids-dashboard', 'fridge-dashboard', 'ledger-dashboard'] },
+      path: { type: 'string', description: '비우면 저장소 전체' },
+      query: { type: 'string' },
+      regex: { type: 'boolean' },
+      max: { type: 'integer' }
+    },
+    read_code_slice: {
+      repo: { type: 'string', enum: ['home', 'kids-dashboard', 'fridge-dashboard', 'ledger-dashboard'] },
+      path: { type: 'string' },
+      start: { type: 'integer', description: '시작 줄 (1부터)' },
+      lines: { type: 'integer', description: '읽을 줄 수 (기본 120)' }
+    },
+    code_read: {
+      repo: { type: 'string', enum: ['home', 'kids-dashboard', 'fridge-dashboard', 'ledger-dashboard'] },
+      path: { type: 'string' }
+    },
+    code_edit: {
+      repo: { type: 'string', enum: ['home', 'kids-dashboard', 'fridge-dashboard', 'ledger-dashboard'] },
+      path: { type: 'string' },
+      edits: {
+        type: 'array',
+        description: '찾아 바꿀 목록 (작은 패치)',
+        items: {
+          type: 'object',
+          properties: {
+            old_string: { type: 'string' },
+            new_string: { type: 'string' },
+            replace_all: { type: 'boolean' }
+          },
+          required: ['old_string', 'new_string']
+        }
+      },
+      content: { type: 'string', description: '작은 파일을 통째로 쓸 때만' },
+      range: {
+        type: 'object',
+        properties: { start: { type: 'integer' }, end: { type: 'integer' }, text: { type: 'string' } }
+      },
+      summary: { type: 'string', description: '무엇을 왜 바꿨는지 (커밋 메시지)' }
+    }
+  };
+
+  function openaiToolDef(t) {
+    return {
+      type: 'function',
+      function: {
+        name: t.name,
+        description: String(t.title || t.name) + ' — ' + String(t.desc || '') + ' args 예: ' + String(t.argsHint || '{}'),
+        parameters: {
+          type: 'object',
+          properties: TOOL_SCHEMAS[t.name] || {},
+          additionalProperties: true
+        }
+      }
+    };
+  }
+  function openaiTools() {
+    var out = [];
+    for (var i = 0; i < TOOLS.length; i++) out.push(openaiToolDef(TOOLS[i]));
+    return out;
+  }
+
   function toolByName(name) {
     for (var i = 0; i < TOOLS.length; i++) if (TOOLS[i].name === name) return TOOLS[i];
     return null;
@@ -2892,6 +3055,7 @@ var QR = (function () {
         '<input class="gate-hide-user" type="text" name="username" autocomplete="username" value="' + esc(S.me ? S.me.id : '') + '" readonly tabindex="-1" aria-hidden="true">' +
         (deviceMode ? '<label>이 기기 이름<input id="gateDevName" name="devicename" maxlength="40" value="' + esc(S.deviceName) + '" spellcheck="false" autocomplete="off"></label>' : '') +
         '<label>6자리 인증 번호<input id="gateTotp" name="totp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="123456" spellcheck="false" enterkeyhint="done" style="letter-spacing:.32em;font-size:22px;font-weight:900;text-align:center"></label>' +
+        '<button class="gate-paste" type="button" data-act="gate-paste">📋 붙여넣기</button>' +
         '<button class="gate-btn" type="submit" id="gateTotpBtn">' + (deviceMode ? '이 기기 등록하고 열기' : '열기') + '</button>' +
         '</form>' +
         '<button class="gate-alt" type="button" data-act="gate-alt">비밀번호로 ' + (deviceMode ? '등록' : '해제') + '</button>' +
@@ -3193,6 +3357,9 @@ var QR = (function () {
   }
 
   function msgHtml(m) {
+    if (m.nudge) {
+      return '<div class="nudge">🔄 말로만 하지 말고 바로 실행하도록 한 번 더 요청했어요</div>';
+    }
     if (m.role === 'tool') {
       var t = '<div style="margin:6px 0 6px 36px;font-size:11.5px;font-weight:800;color:#8a83a0">' +
         '🔧 ' + esc(m.label || m.tool || '도구') + '</div>';
@@ -3324,7 +3491,8 @@ var QR = (function () {
     lines.push('- 데이터는 비공개 저장소(kids-dashboard-data)에 있어. 데이터는 family_data 도구로 읽고, 고칠 때는 family_save로 제안해.');
     lines.push('');
     lines.push('[도구 사용법]');
-    lines.push('필요할 때 아래 형식의 블록을 따로 출력해. 일반 답변과 섞어도 된다. 한 번에 하나씩.');
+    lines.push('도구는 함수 호출(도구 이름 + JSON 인자)로 부른다. 함수 호출을 쓸 수 없는 모델이면 아래 ```tool 블록을 출력해. 일반 답변과 섞어도 된다. 한 번에 하나씩.');
+    lines.push('“찾아볼게요·확인할게요”처럼 말만 하고 끝내지 마라. 바로 도구를 호출해 실행하고, 그 결과로 답한다.');
     lines.push('```tool');
     lines.push('{"tool":"도구이름","args":{}}');
     lines.push('```');
@@ -3389,6 +3557,13 @@ var QR = (function () {
     return String(text || '').replace(/```[a-zA-Z]*\s*[\s\S]*?```/g, '').trim();
   }
 
+  /* “찾을게요”처럼 말로만 하고 도구를 부르지 않았는지 */
+  function willActByWords(text) {
+    var s = String(text || '');
+    if (!s) return false;
+    return /(찾을게요|찾아볼게요|찾아보겠|확인할게요|확인해\s?볼게요|확인해\s?보겠|검색할게요|검색해\s?볼게요|검색해\s?보겠|열어볼게요|열어\s?보겠|살펴볼게요|살펴\s?보겠|읽어볼게요|읽어\s?보겠|수정할게요|고칠게요|작업할게요)/.test(s);
+  }
+
   function errorText(pid, model, res) {
     var id = modelIdOf(pid, model);
     var info = limitInfo(id);
@@ -3396,6 +3571,7 @@ var QR = (function () {
     if (res.status === 429) head = '지금 이 모델은 요청 한도에 걸렸어요.';
     else if (res.status === 401 || res.status === 403) head = '키나 권한을 확인해야 해요.';
     else if (!res.status) head = '인터넷 연결을 확인해 주세요.';
+    else if (/terms?\s+acceptance/i.test(String(res.error || ''))) head = '이 모델은 약관 동의가 필요해 지금은 쓸 수 없어 목록에서 숨겼어요.';
     else if (isDeadModelError(res.status, res.error)) head = '이 모델은 더 이상 쓸 수 없어 목록에서 숨겼어요.';
     else head = 'AI 쪽에서 문제가 생겼어요.';
     var detail = res.error ? '\n(' + String(res.error).slice(0, 160) + ')' : '';
@@ -3415,6 +3591,7 @@ var QR = (function () {
       addMsg(t, { role: 'assistant', error: true, model: id, text: PROVIDERS[pid].label + ' 키가 아직 없어요. ⚙️ 설정에서 무료 키를 넣어 주세요. (다른 제공자 키를 넣었다면 모델을 바꿔 주세요.)' });
       return;
     }
+    var nudged = false;
     for (var step = 0; step < 5; step++) {
       var msgs = buildHistory(t);
       if (attach && ((attach.images && attach.images.length) || (attach.pdfs && attach.pdfs.length))) {
@@ -3450,20 +3627,44 @@ var QR = (function () {
         return;
       }
       reviveDeadModel(id);
-      var call = parseToolCall(res.text);
-      if (!call) {
+      /* 1) 함수 도구(tool_calls) 응답을 먼저 보고, 2) 없으면 ```tool 블록을 살펴봐요 */
+      var native = (res.toolCalls && res.toolCalls.length) ? res.toolCalls : null;
+      var call = native ? null : parseToolCall(res.text);
+      if (!native && !call) {
+        /* 코드 편집자 모드에서 말로만 “찾아볼게요” 하고 멈추면 한 번만 다시 재촉해요 */
+        if (!nudged && step === 0 && personaOf(t).preset === 'code' && willActByWords(res.text)) {
+          nudged = true;
+          addMsg(t, { role: 'assistant', text: res.text, model: id });
+          addMsg(t, { role: 'user', text: '말로만 하지 말고 지금 바로 도구를 호출해 실행해 주세요.', nudge: true });
+          if (S.active === t.id) renderThread();
+          S.scrollNext = true;
+          saveSoon();
+          continue;
+        }
         addMsg(t, { role: 'assistant', text: res.text, model: id });
         return;
       }
       var plain = stripToolBlock(res.text);
       if (plain) addMsg(t, { role: 'assistant', text: plain, model: id });
-      var out;
-      try {
-        out = await toolByName(call.name).run(call.args, { threadId: t.id });
-      } catch (e) {
-        out = { text: '도구를 실행하지 못했어요: ' + (e && e.message ? e.message : ''), label: '오류' };
+      var todo = native || [call];
+      for (var ti = 0; ti < todo.length; ti++) {
+        var one = todo[ti] || {};
+        var tool = toolByName(one.name);
+        var out;
+        if (!tool) {
+          out = {
+            text: '그런 도구는 없어요. 쓸 수 있는 도구는 ' + TOOLS.map(function (x) { return x.name; }).join(', ') + ' 예요.',
+            label: '도구 이름 확인'
+          };
+        } else {
+          try {
+            out = await tool.run(one.args || {}, { threadId: t.id });
+          } catch (e) {
+            out = { text: '도구를 실행하지 못했어요: ' + (e && e.message ? e.message : ''), label: '오류' };
+          }
+        }
+        addMsg(t, { role: 'tool', tool: one.name, label: out.label || one.name, text: out.text || '', card: out.card || null, callId: one.id || '' });
       }
-      addMsg(t, { role: 'tool', tool: call.name, label: out.label || call.name, text: out.text || '', card: out.card || null });
       if (S.active === t.id) renderThread();
       S.scrollNext = true;
       saveSoon();
@@ -3638,7 +3839,9 @@ var QR = (function () {
       toast('사용 가능해요.');
     } else if (isDeadModelError(res.status, res.error)) {
       markDeadModel(id, res.error);
-      toast('이 모델은 더 이상 쓸 수 없어 목록에서 숨겼어요.');
+      toast(/terms?\s+acceptance/i.test(String(res.error || ''))
+        ? '약관 동의가 필요해 지금은 쓸 수 없는 모델이라 목록에서 숨겼어요.'
+        : '이 모델은 더 이상 쓸 수 없어 목록에서 숨겼어요.');
     } else {
       toast((res.status === 429 ? '한도/제한에 걸렸어요. ' : '') + (String(res.error || '확인하지 못했어요').slice(0, 110)));
     }
@@ -4067,6 +4270,7 @@ var QR = (function () {
       renderGate();
       return;
     }
+    if (act === 'gate-paste') { pasteGateTotp(); return; }
     if (act === 'totp-begin') { totpBeginSetup(); return; }
     if (act === 'totp-cancel') { totpCancelSetup(); return; }
     if (act === 'totp-confirm') { totpConfirmSetup(); return; }
