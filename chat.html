@@ -54,6 +54,7 @@
 
   /* ---------- 앱 뼈대 ---------- */
   .app{
+    position:relative;
     display:flex; flex-direction:column; height:100%;
     max-width:980px; margin:0 auto; width:100%; min-width:0; overflow-x:hidden;
     padding:0 env(safe-area-inset-right,0) 0 env(safe-area-inset-left,0);
@@ -264,6 +265,24 @@
   .send[disabled]{ opacity:.45; }
   .foot{ margin:0; padding:0 12px 6px; font-size:10.5px; font-weight:800; color:#a79fbb; text-align:center; }
 
+  /* ---------- 맨 위로 · 맨 아래로 (대화 칸 오른쪽 아래에 떠 있는 단추) ---------- */
+  .jump-stack{
+    position:absolute; right:12px; bottom:118px; z-index:7;
+    display:flex; flex-direction:column; gap:8px; align-items:center;
+    pointer-events:none;
+  }
+  .jump-btn{
+    width:36px; height:36px; padding:0; border:1px solid rgba(255,255,255,.5); border-radius:50%;
+    display:grid; place-items:center; font-size:15px; line-height:1;
+    background:rgba(44,36,64,.34); color:#fff;
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    box-shadow:0 5px 14px rgba(44,36,64,.16);
+    opacity:0; visibility:hidden; pointer-events:none; transform:translateY(4px) scale(.94);
+    transition:opacity .16s ease, transform .16s ease, visibility .16s step-end;
+  }
+  .jump-btn.show{ opacity:1; visibility:visible; pointer-events:auto; transform:none; transition:opacity .16s ease, transform .16s ease, visibility 0s; }
+  .jump-btn:active{ transform:scale(.94); }
+
   /* ---------- 잠금 화면 ---------- */
   .gate{
     position:fixed; inset:0; display:grid; grid-template-columns:minmax(0,1fr); place-items:center; padding:20px;
@@ -404,6 +423,8 @@
     .card{ max-width:92%; }
     .toast{ bottom: calc(104px + env(safe-area-inset-bottom,0px)); }
     .composer{ gap:6px; padding-left:10px; padding-right:10px; }
+    .jump-stack{ right:10px; gap:7px; }
+    .jump-btn{ width:34px; height:34px; font-size:14px; }
     .tool-btn{ width:38px; height:42px; font-size:16px; border-radius:13px; }
     .send{ width:42px; height:42px; border-radius:14px; }
     .mrow{ flex-wrap:wrap; }
@@ -432,6 +453,10 @@
 
   <nav class="threadbar" id="threadBar" aria-label="대화방 목록"></nav>
   <main class="thread" id="threadView" aria-live="polite"></main>
+  <div class="jump-stack" id="jumpStack">
+    <button class="jump-btn" type="button" id="jumpTop" data-act="jump-top" aria-label="맨 위로" title="맨 위로">⬆️</button>
+    <button class="jump-btn" type="button" id="jumpBottom" data-act="jump-bottom" aria-label="맨 아래로" title="맨 아래로">⬇️</button>
+  </div>
   <div class="quickrow" id="quickRow"></div>
   <div class="rec-bar" id="recBar" hidden>
     <span class="rec-dot" aria-hidden="true"></span><span>녹음 중</span><b id="recTime">00:00</b>
@@ -3854,12 +3879,47 @@ var QR = (function () {
     return h;
   }
 
+  /* ============ 맨 위로 · 맨 아래로 단추 ============ */
+  /* 대화 칸 바로 아래(퀵 버튼·입력줄 위)에 뜨게 위치를 잡아요 */
+  function placeJumpBtns() {
+    var view = document.getElementById('threadView');
+    var stack = document.getElementById('jumpStack');
+    if (!view || !stack) return;
+    var app = document.getElementById('appRoot');
+    var vr = view.getBoundingClientRect();
+    var ab = (app && app.getBoundingClientRect().bottom) || window.innerHeight;
+    var gap = Math.round(ab - vr.bottom) + 10;
+    if (!isFinite(gap) || gap < 8) gap = 84;
+    stack.style.bottom = gap + 'px';
+  }
+  /* 넘치는 글이 있을 때만, 위·아래 끝에 닿았을 때만 보여요 */
+  function updJumpBtns() {
+    var view = document.getElementById('threadView');
+    var top = document.getElementById('jumpTop');
+    var bot = document.getElementById('jumpBottom');
+    if (!view || !top || !bot) return;
+    placeJumpBtns();
+    var canScroll = view.scrollHeight > view.clientHeight + 24;
+    var restBottom = view.scrollHeight - view.scrollTop - view.clientHeight;
+    top.classList.toggle('show', canScroll && view.scrollTop > 24);
+    bot.classList.toggle('show', canScroll && restBottom > 24);
+  }
+  function jumpThread(toTop) {
+    var view = document.getElementById('threadView');
+    if (!view) return;
+    var y = toTop ? 0 : view.scrollHeight;
+    try { view.scrollTo({ top: y, behavior: 'smooth' }); }
+    catch (e) { view.scrollTop = y; }
+    updJumpBtns();
+  }
+
   function renderThread() {
     var view = document.getElementById('threadView');
     if (!view) return;
     var t = activeThread();
     if (!t) {
       view.innerHTML = '<div class="welcome"><div class="big">🤖</div><h2>새 대화를 시작해요</h2><p>대시보드 코드를 고치거나, 가족 데이터를 확인하거나, 그냥 수다를 떨 수도 있어요.</p></div>';
+      updJumpBtns();
       return;
     }
     var nearBottom = (view.scrollHeight - view.scrollTop - view.clientHeight) < 120;
@@ -3880,6 +3940,7 @@ var QR = (function () {
     view.innerHTML = h;
     renderQuoteBar();
     if (nearBottom || S.scrollNext) { view.scrollTop = view.scrollHeight; S.scrollNext = false; }
+    updJumpBtns();
   }
 
   /* ============ 도구 카드 동작 ============ */
@@ -4849,6 +4910,8 @@ var QR = (function () {
       return;
     }
     if (act === 'tab-go') { S.active = el.getAttribute('data-id') || S.active; S.scrollNext = true; renderThreadBar(); renderThread(); saveSoon(); return; }
+    if (act === 'jump-top') { jumpThread(true); return; }
+    if (act === 'jump-bottom') { jumpThread(false); return; }
     if (act === 'tab-del') {
       var tid = el.getAttribute('data-id');
       var keep = [];
@@ -4954,6 +5017,24 @@ var QR = (function () {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
   window.setInterval(tick, 1000);
+
+  /* 맨 위로·맨 아래로 단추: 대화 칸 스크롤·창 크기·입력줄 높이가 바뀔 때 다시 맞춰요 */
+  (function () {
+    var view = document.getElementById('threadView');
+    if (view) view.addEventListener('scroll', updJumpBtns, { passive: true });
+    window.addEventListener('resize', updJumpBtns, { passive: true });
+    window.addEventListener('orientationchange', updJumpBtns, { passive: true });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) updJumpBtns(); });
+    if (window.ResizeObserver) {
+      try {
+        var ro = new ResizeObserver(function () { placeJumpBtns(); });
+        ['quickRow', 'composer', 'recBar', 'quoteBar'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) ro.observe(el);
+        });
+      } catch (e) { /* 무시 */ }
+    }
+  })();
 
   /* ============ 붙이기: 이미지 · 음성 · 글/코드 · PDF ============ */
   S.attachments = [];
