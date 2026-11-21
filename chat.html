@@ -3678,7 +3678,13 @@ var QR = (function () {
       if (S.totpSetup) return; /* 설정 중에는 그대로 둬요 */
       if (S.totpMsg === '저장하는 중…' || S.totpMsg === '끄는 중…') return;
       S.totp = t;
-      renderSettings();
+      /* 입력 중인 칸이 있으면 화면을 다시 그리지 않아요 (글자가 지워지지 않게) */
+      var typed = false;
+      try {
+        var els = document.querySelectorAll('#settingsBody input, #settingsBody textarea');
+        for (var i = 0; i < els.length; i++) if (String(els[i].value || '').length) { typed = true; break; }
+      } catch (e) { typed = false; }
+      if (!typed) renderSettings();
     }).catch(function () { /* 무시 */ });
   }
   function closeSettings() {
