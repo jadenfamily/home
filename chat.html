@@ -2411,15 +2411,22 @@ var QR = (function () {
     var mid = modelIdOf('gemini', model);
     var withTools = !(opts && opts.noTools) && !noToolsModel(mid);
     function buildBody(useTools) {
+      var contents = [];
+      for (var mi = 0; mi < req.messages.length; mi++) {
+        var m = req.messages[mi];
+        var parts = [{ text: String(m.text || '') }];
+        var imgs = m.images || [], pdfs = m.pdfs || [], i;
+        for (i = 0; i < imgs.length; i++) parts.push({ inlineData: { mimeType: imgs[i].mime, data: imgs[i].data } });
+        for (i = 0; i < pdfs.length; i++) parts.push({ inlineData: { mimeType: 'application/pdf', data: pdfs[i].data } });
+        var role = m.role === 'assistant' ? 'model' : 'user';
+        var prev = contents[contents.length - 1];
+        /* 도구 결과는 사용자 말로 붙어서 같은 역할이 이어져요. 한 칸으로 합쳐야 Gemini가 받아요 */
+        if (prev && prev.role === role) prev.parts = prev.parts.concat(parts);
+        else contents.push({ role: role, parts: parts });
+      }
       var body = {
         systemInstruction: { parts: [{ text: req.system }] },
-        contents: req.messages.map(function (m) {
-          var parts = [{ text: String(m.text || '') }];
-          var imgs = m.images || [], pdfs = m.pdfs || [], i;
-          for (i = 0; i < imgs.length; i++) parts.push({ inlineData: { mimeType: imgs[i].mime, data: imgs[i].data } });
-          for (i = 0; i < pdfs.length; i++) parts.push({ inlineData: { mimeType: 'application/pdf', data: pdfs[i].data } });
-          return { role: m.role === 'assistant' ? 'model' : 'user', parts: parts };
-        }),
+        contents: contents,
         generationConfig: { temperature: 0.5, maxOutputTokens: (opts && opts.maxTokens) || 2048 }
       };
       /* 말로만 “찾아볼게요” 하지 않고 실제로 도구를 부르도록 함수 도구를 함께 보내요 */
