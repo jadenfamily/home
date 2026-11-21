@@ -2484,6 +2484,25 @@ var QR = (function () {
     }
     return '';
   }
+  /* 429(한도)·503(혼잡)일 때: 같은 제공자의 다른 모델 → 다른 제공자 순서로 바로 보낼 수 있는 모델을 찾아요 */
+  function busyFallbackModel(badId, tried) {
+    var sp = splitModelId(badId);
+    var order = [sp.pid].concat(PROVIDER_ORDER.filter(function (p) { return p !== sp.pid; }));
+    for (var i = 0; i < order.length; i++) {
+      var pid = order[i];
+      if (!pid || !PROVIDERS[pid] || !hasKey(pid)) continue;
+      var list = modelList(pid);
+      for (var k = 0; k < list.length; k++) {
+        var m = String(list[k] || '');
+        if (!m || NON_CHAT_MODEL_RE.test(m)) continue;
+        var id = modelIdOf(pid, m);
+        if (id === badId || (tried && tried[id]) || isDeadModel(id) || noToolsModel(id)) continue;
+        if (limitInfo(id).left > 0) continue;
+        return id;
+      }
+    }
+    return '';
+  }
   function modelList(pid) {
     var c = cachedModels();
     var list = (c && Object.prototype.toString.call(c.ids[pid]) === '[object Array]') ? c.ids[pid] : [];
@@ -2936,28 +2955,94 @@ var QR = (function () {
   }
 
   /* 큰 파일을 통째로 보내지 않도록 줄/구간 단위로 다뤄요 (토큰 절약) */
+  /* 글자는 같은데 들여쓰기·공백만 다른 줄을 찾아요 (쓸 때는 파일 안에서 딱 한 곳일 때만) */
+  function findTrimmedBlock(text, oldS) {
+    var want = String(oldS == null ? '' : oldS).replace(/\r\n/g, '\n').split('\n');
+    for (var a = 0; a < want.length; a++) want[a] = String(want[a]).trim();
+    while (want.length && want[0] === '') want.shift();
+    while (want.length && want[want.length - 1] === '') want.pop();
+    var lines = String(text == null ? '' : text).split('\n');
+    if (!want.length) return { hits: [], want: want, lines: lines };
+    var hits = [];
+    for (var i = 0; i + want.length <= lines.length; i++) {
+      var same = true;
+      for (var j = 0; j < want.length; j++) {
+        if (String(lines[i + j]).trim() !== want[j]) { same = false; break; }
+      }
+      if (!same) continue;
+      hits.push(i);
+      if (hits.length > 8) break;
+    }
+    return { hits: hits, want: want, lines: lines };
+  }
+  /* 못 찾았을 때 “가장 비슷한 줄”의 위치를 알려 줘요 */
+  function closestLineHint(text, oldS) {
+    var lines = String(text == null ? '' : text).split('\n');
+    var raw = String(oldS == null ? '' : oldS).replace(/\r\n/g, '\n').split('\n');
+    var cands = [];
+    for (var i = 0; i < raw.length; i++) {
+      var t = String(raw[i]).trim();
+      if (t.length >= 6 && cands.indexOf(t) < 0) cands.push(t);
+    }
+    cands.sort(function (a, b) { return b.length - a.length; });
+    for (var c = 0; c < cands.length; c++) {
+      var needle = cands[c].slice(0, 80), best = null;
+      for (var k = 0; k < lines.length; k++) {
+        var s = String(lines[k]).trim();
+        if (!s) continue;
+        var score = 0;
+        if (s === needle) score = 1000 + s.length;
+        else if (needle.length >= 12 && s.indexOf(needle) >= 0) score = 500 + needle.length;
+        else {
+          var cp = 0;
+          while (cp < needle.length && cp < s.length && needle.charAt(cp) === s.charAt(cp)) cp++;
+          if (cp >= 8) score = cp;
+        }
+        if (score > 0 && (!best || score > best.score)) best = { score: score, line: k + 1, text: String(lines[k]).slice(0, 160) };
+      }
+      if (best) return best;
+    }
+    return null;
+  }
   function applyEdits(text, edits) {
-    var out = String(text), applied = [];
+    var out = String(text == null ? '' : text), applied = [];
     for (var i = 0; i < edits.length && i < 20; i++) {
       var e = edits[i] || {};
       var oldS = String(e.old_string == null ? (e.find == null ? '' : e.find) : e.old_string);
       var newS = String(e.new_string == null ? (e.replace == null ? '' : e.replace) : e.new_string);
       if (!oldS) return { ok: false, error: (i + 1) + '번째 수정에 old_string이 없어요.' };
+      if (oldS === newS) return { ok: false, error: (i + 1) + '번째 수정: old_string과 new_string이 같아 바뀌는 내용이 없어요.' };
       var count = out.split(oldS).length - 1;
-      if (!count) {
-        return {
-          ok: false,
-          error: (i + 1) + '번째 수정: old_string을 파일에서 찾지 못했어요. search_code나 read_code_slice로 정확한 글자를 먼저 확인해 주세요.\n(찾던 글: ' + oldS.slice(0, 80).replace(/\n/g, '\\n') + ')'
-        };
+      if (count) {
+        var idx = out.indexOf(oldS);
+        if (e.replace_all) {
+          out = out.split(oldS).join(newS);
+          applied.push({ index: i + 1, count: count, all: true });
+        } else {
+          out = out.slice(0, idx) + newS + out.slice(idx + oldS.length);
+          applied.push({ index: i + 1, count: 1, total: count });
+        }
+        continue;
       }
-      var idx = out.indexOf(oldS);
-      if (e.replace_all) {
-        out = out.split(oldS).join(newS);
-        applied.push({ index: i + 1, count: count, all: true });
-      } else {
-        out = out.slice(0, idx) + newS + out.slice(idx + oldS.length);
-        applied.push({ index: i + 1, count: 1, total: count });
+      /* 글자는 같은데 들여쓰기·공백만 다를 때: 딱 한 곳이면 그 자리를 바꿔요 */
+      var tm = findTrimmedBlock(out, oldS);
+      if (tm.hits.length === 1) {
+        var st = 0, b;
+        for (b = 0; b < tm.hits[0]; b++) st += String(tm.lines[b]).length + 1;
+        var en = st;
+        for (b = 0; b < tm.want.length; b++) en += String(tm.lines[tm.hits[0] + b]).length + (b < tm.want.length - 1 ? 1 : 0);
+        out = out.slice(0, st) + newS + out.slice(en);
+        applied.push({ index: i + 1, count: 1, total: 1, trimmed: true });
+        continue;
       }
+      var msg = (i + 1) + '번째 수정: old_string을 파일에서 찾지 못했어요.';
+      if (tm.hits.length > 1) {
+        msg += '\n공백만 다른 줄이 ' + tm.hits.length + '곳(더 있을 수 있어요)에 있어 어디를 바꿀지 고를 수 없어요. 앞뒤 줄을 한두 줄 더 넣어 한 곳만 남겨 주세요.';
+      }
+      var hint = closestLineHint(out, oldS);
+      if (hint) msg += '\n가장 비슷한 줄: ' + hint.line + '번째 줄 「' + hint.text.trim() + '」 — 이 들여쓰기·글자를 그대로 old_string에 쓰면 돼요.';
+      msg += '\n(찾던 글: ' + oldS.slice(0, 80).replace(/\n/g, '\\n') + ')';
+      return { ok: false, error: msg };
     }
     return { ok: true, text: out, applied: applied };
   }
@@ -3049,7 +3134,7 @@ var QR = (function () {
       name: 'search_code',
       emoji: '🔎',
       title: '코드에서 찾기',
-      desc: '파일 안에서 단어나 정규식을 찾아 “줄 번호 + 짧은 미리보기”만 돌려줘요. 큰 파일도 토큰을 적게 써요. 먼저 이걸로 위치를 찾으세요.',
+      desc: '파일 안에서 단어나 정규식을 찾아 “줄 번호 + 앞뒤 2줄”을 돌려줘요(최대 8군데). 들여쓰기까지 그대로 보이니 그걸 보고 code_edit의 old_string을 쓰면 돼요. 먼저 이걸로 위치를 찾으세요.',
       argsHint: '{"repo":"kids-dashboard","path":"index.html","query":"function renderRoutine","regex":false,"max":30}',
       run: async function (a) {
         var repo = normRepo(a.repo);
@@ -3076,13 +3161,29 @@ var QR = (function () {
           if (hits.length >= max * 4) break;
         }
         if (!hits.length) return { text: '“' + q + '”를 찾지 못했어요. (파일 ' + lines.length + '줄) 다른 단어로 다시 찾아 보세요.', label: '코드 검색 · ' + p };
-        var out = [];
-        for (var k = 0; k < hits.length && k < max; k++) {
-          var ln = hits[k];
-          out.push(ln + ': ' + String(lines[ln - 1] || '').trim().slice(0, 150));
+        /* 맞은 줄 앞뒤 2줄까지 함께 보여 줘요 (들여쓰기를 그대로 보게) · 최대 8군데, 본문은 7KB까지 */
+        var use = hits.slice(0, Math.min(hits.length, Math.min(max, 8)));
+        var hitSet = {}, ctxSet = {}, k, d, n;
+        for (k = 0; k < use.length; k++) {
+          hitSet[use[k]] = 1;
+          for (d = -2; d <= 2; d++) {
+            n = use[k] + d;
+            if (n >= 1 && n <= lines.length) ctxSet[n] = 1;
+          }
+        }
+        var out = [], prev = 0, budgetCh = 7000;
+        for (n = 1; n <= lines.length; n++) {
+          if (!ctxSet[n]) continue;
+          if (prev && n > prev + 1) out.push('   …');
+          var raw = String(lines[n - 1] == null ? '' : lines[n - 1]);
+          if (raw.length > 170) raw = raw.slice(0, 170) + '…';
+          out.push(hitSet[n] ? (n + ': ' + raw) : (('     ' + n).slice(-5) + '| ' + raw));
+          prev = n;
+          budgetCh -= raw.length + 8;
+          if (budgetCh <= 0) { out.push('… (토큰을 아끼려고 여기까지만 보여 줘요)'); break; }
         }
         return {
-          text: '“' + q + '” ' + hits.length + '군데 (파일 ' + lines.length + '줄). 필요한 줄만 read_code_slice로 읽으세요.\n' + out.join('\n') +
+          text: '“' + q + '” ' + hits.length + '군데 (파일 ' + lines.length + '줄). “줄번호:”가 맞은 줄이고, 그 앞뒤 2줄을 함께 보여 줘요.\n' + out.join('\n') +
             (hits.length > max ? '\n… 더 있어요 (max를 올리거나 단어를 좁혀 주세요)' : ''),
           label: '코드 검색 · ' + p,
           quiet: true,
@@ -3172,7 +3273,7 @@ var QR = (function () {
           var parts = [];
           for (var i = 0; i < res.applied.length; i++) {
             var ap = res.applied[i];
-            parts.push(ap.index + '번째' + (ap.all ? ' (모두 ' + ap.count + '군데)' : (ap.total > 1 ? ' (같은 글자 ' + ap.total + '군데 중 첫 번째)' : '')));
+            parts.push(ap.index + '번째' + (ap.trimmed ? ' (들여쓰기 차이 무시하고 맞춤)' : '') + (ap.all ? ' (모두 ' + ap.count + '군데)' : (ap.total > 1 ? ' (같은 글자 ' + ap.total + '군데 중 첫 번째)' : '')));
           }
           patchNote = '찾아 바꾸기 ' + res.applied.length + '개 적용: ' + parts.join(', ');
         } else if (a.range && a.range.start != null) {
@@ -3190,17 +3291,20 @@ var QR = (function () {
         if (content === oldText) return { text: '바뀐 내용이 없어요. old_string과 new_string을 확인해 주세요.', label: '코드 · ' + p };
         var id = uid('p_');
         var diff = diffLines(oldText, content);
-        var check = /\.html?$/i.test(p) ? await checkHtml(content) : { steps: [], ok: true, skipped: true };
+        /* 화면에 보여 줄 변경이 없으면(+0 · -0) 제안 카드를 만들지 않아요 */
+        if (!diff.added && !diff.removed) return { text: '바뀐 내용이 없어 old_string과 new_string을 확인해야 해요. 실제로 달라지는 글자로 다시 제안해 주세요.', label: '코드 · ' + p };
+        var check = await checkCodeFile(p, content);
         S.proposals[id] = {
           id: id, repo: repo, path: p, content: content, old: oldText,
           summary: String(a.summary || '코드 수정'), patchNote: patchNote, diff: diff, check: check,
           thread: ctx.threadId, at: nowIso(), state: 'pending'
         };
         var bad = !check.ok;
+        var stageWord = (check.steps && check.steps.length === 3) ? '3단계 자동 검사' : '자동 검사';
         return {
           text: (patchNote ? patchNote + '. ' : '') + (bad
             ? '자동 검사에서 문제가 보여요. 아래 내용을 보고 고친 뒤 다시 제안해 주세요.'
-            : '3단계 자동 검사를 통과했어요. 아래 카드에서 [반영하기]를 누르면 배포돼요.'),
+            : stageWord + '를 통과했어요. 아래 카드에서 [반영하기]를 누르면 배포돼요.'),
           label: '수정 제안 · ' + repo + '/' + p,
           card: { kind: 'edit', id: id }
         };
@@ -3457,40 +3561,72 @@ var QR = (function () {
     if (arr) arr.push(d);
   });
 
+  /* ES 모듈(import/export)·top-level await 문법 때문에 생긴 오류인지 */
+  function isModuleSyntaxError(e) {
+    var m = String((e && e.message) || '');
+    return /cannot use import statement|unexpected token 'export'|unexpected reserved word|import\.meta|await is only valid|outside a module/i.test(m);
+  }
+  /* import/export를 빼고 다시 컴파일해요 (모듈 파일도 문법 오류를 잡으려고) */
+  function stripModuleSyntax(code) {
+    return String(code == null ? '' : code)
+      .replace(/^\s*import\s+[^;\n]*?from\s*['"][^'"]+['"]\s*;?/gm, '')
+      .replace(/^\s*import\s*['"][^'"]+['"]\s*;?/gm, '')
+      .replace(/^\s*import\s*[\s\S]*?from\s*['"][^'"]+['"]\s*;?/gm, '')
+      .replace(/^\s*export\s*\{[^}]*\}\s*(?:from\s*['"][^'"]+['"])?\s*;?/gm, '')
+      .replace(/^\s*export\s+(default\s+)?/gm, '');
+  }
+  /* 문법 오류가 있으면 그 오류를, 문법이 맞으면 null을 돌려줘요 (컴파일만 하고 실행은 안 해요) */
+  function jsCompileError(code) {
+    var src = String(code == null ? '' : code);
+    if (!src.trim()) return null;
+    var stripped = stripModuleSyntax(src);
+    var attempts = [src, stripped, 'return (async function(){\n' + stripped + '\n});'];
+    var first = null;
+    for (var i = 0; i < attempts.length; i++) {
+      try { new Function(attempts[i]); return null; }
+      catch (e) {
+        if (!first) first = e;
+        if (!isModuleSyntaxError(e)) return e;
+      }
+    }
+    return first;
+  }
+
+  /* HTML은 브라우저 파서(DOMParser)로 읽어요. JS 문자열 안의 “<script>” 글자에 속지 않아요. */
   function stepHtml(html) {
-    var errs = [];
-    if (!/<html[\s>]/i.test(html)) errs.push('<html> 태그가 없어요');
-    if (!/<\/html>/i.test(html)) errs.push('</html> 닫는 태그가 없어요');
-    var open = (html.match(/<script\b/gi) || []).length;
-    var close = (html.match(/<\/script\s*>/gi) || []).length;
-    if (open !== close) errs.push('<script> 여는 개수(' + open + ')와 닫는 개수(' + close + ')가 달라요');
+    var errs = [], src = String(html == null ? '' : html);
     var doc = null;
-    try { doc = new DOMParser().parseFromString(html, 'text/html'); } catch (e) { errs.push('HTML을 해석하지 못했어요'); }
+    try { doc = new DOMParser().parseFromString(src, 'text/html'); }
+    catch (e) { errs.push('HTML을 해석하지 못했어요'); }
+    if (!/<html[\s>]/i.test(src)) errs.push('<html> 태그가 없어요');
     if (doc) {
       if (doc.querySelector('parsererror')) errs.push('브라우저가 HTML 구조를 해석하지 못했어요');
-      if (!doc.body || !doc.body.children.length) errs.push('화면에 그릴 내용(<body>)이 비어 있어요');
-      var broken = doc.querySelectorAll('script:not([src])');
-      for (var i = 0; i < broken.length; i++) { /* 구조 확인용 */ }
+      if (!doc.body) errs.push('<body> 태그가 없어요');
+      else if (!doc.body.children.length && !String(doc.body.textContent || '').trim()) errs.push('화면에 그릴 내용(<body>)이 비어 있어요');
     }
+    /* 파일 끝이 </html>로 닫혀 있는지 (중간에 잘려 저장된 파일 찾기) */
+    if (!/<\/html\s*>\s*(?:<!--[\s\S]*?-->\s*)*$/i.test(src.slice(-400))) errs.push('</html> 닫는 태그가 없어요');
     return { ok: !errs.length, errors: errs };
   }
 
+  /* <script>도 브라우저 파서가 찾아 준 것만 검사해요 (문자열 속 글자는 스크립트가 아니에요) */
   function stepScripts(html) {
-    var errs = [];
-    var re = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, m, idx = 0;
-    while ((m = re.exec(html))) {
-      idx++;
-      var attrs = m[1] || '';
-      var code = m[2] || '';
-      if (/\bsrc\s*=/.test(attrs)) continue;
-      if (/type\s*=\s*["']?(?!text\/javascript|module|application\/javascript)/i.test(attrs)) continue;
+    var errs = [], src = String(html == null ? '' : html), doc = null;
+    try { doc = new DOMParser().parseFromString(src, 'text/html'); }
+    catch (e) { return { ok: false, errors: ['HTML을 해석하지 못해 스크립트를 확인하지 못했어요'] }; }
+    var list = doc.querySelectorAll('script'), idx = 0;
+    for (var i = 0; i < list.length; i++) {
+      var el = list[i];
+      if (el.getAttribute('src')) continue;                 /* 외부 스크립트는 브라우저가 불러와요 */
+      var type = String(el.getAttribute('type') || '').toLowerCase().replace(/;.*$/, '').trim();
+      if (type && !/^(text\/javascript|application\/javascript|module|text\/ecmascript)$/.test(type)) continue;
+      var code = el.textContent || '';
       if (!code.trim()) continue;
-      try {
-        /* 컴파일만 하고 실행하지는 않아요 */
-        new Function(code);
-      } catch (e) {
-        var line = guessLine(code, e);
-        errs.push('스크립트 ' + idx + '번째: ' + (e && e.message ? e.message : '문법 오류') + (line ? ' (' + line + '번째 줄 근처)' : ''));
+      idx++;
+      var err = jsCompileError(code);
+      if (err) {
+        var line = errLine(code, err);
+        errs.push('스크립트 ' + idx + '번째 문법 오류: ' + (err.message || '알 수 없는 오류') + (line ? ' (' + line + '번째 줄 근처)' : ''));
       }
     }
     return { ok: !errs.length, errors: errs };
@@ -3501,6 +3637,12 @@ var QR = (function () {
     var st = String(e && e.stack || '');
     var m2 = /<anonymous>:(\d+):(\d+)/.exec(st);
     return m2 ? m2[1] : '';
+  }
+  /* 오류 줄은 코드 범위 안에 있을 때만 알려 줘요 (호출한 쪽 줄 번호를 잘못 집는 것 방지) */
+  function errLine(code, e) {
+    var n = Number(guessLine(code, e)) || 0;
+    var max = String(code == null ? '' : code).split('\n').length;
+    return (n >= 1 && n <= max) ? n : '';
   }
 
   function stepRuntime(html) {
@@ -3561,6 +3703,76 @@ var QR = (function () {
       { key: 'runtime', name: '3단계 · 숨김 화면 실행 검사', ok: s3.ok, errors: s3.errors, skipped: !!s3.skipped }
     ];
     return { ok: s1.ok && s2.ok && s3.ok, steps: steps };
+  }
+
+  /* ============ 파일 종류별 자동 검사 (.json/.js/.css) ============ */
+  function checkJsonText(text) {
+    var errs = [], src = String(text == null ? '' : text);
+    try { JSON.parse(src); }
+    catch (e) {
+      var m = /position\s+(\d+)/i.exec(String((e && e.message) || ''));
+      var where = '';
+      if (m) {
+        var pos = Math.min(Number(m[1]) || 0, src.length);
+        where = ' (' + src.slice(0, pos).split('\n').length + '번째 줄 근처)';
+      } else {
+        var lm = /line\s+(\d+)/i.exec(String((e && e.message) || ''));
+        if (lm) where = ' (' + lm[1] + '번째 줄 근처)';
+      }
+      errs.push('JSON 문법 오류' + where + ': ' + String((e && e.message) || '').slice(0, 140));
+    }
+    var step = { key: 'json', name: '1단계 · JSON 문법 검사', ok: !errs.length, errors: errs };
+    return { ok: step.ok, steps: [step] };
+  }
+  function checkJsText(text) {
+    var src = String(text == null ? '' : text), errs = [];
+    var err = jsCompileError(src);
+    if (err) {
+      var line = errLine(src, err);
+      errs.push('문법 오류: ' + String((err && err.message) || '알 수 없는 오류').slice(0, 140) + (line ? ' (' + line + '번째 줄 근처)' : ''));
+    }
+    var step = { key: 'js', name: '1단계 · JavaScript 문법 검사', ok: !errs.length, errors: errs };
+    return { ok: step.ok, steps: [step] };
+  }
+  function checkCssText(text) {
+    var src = String(text == null ? '' : text), errs = [];
+    /* 주석·문자열 안의 중괄호는 세지 않아요 */
+    var depth = 0, line = 1, inComment = false, quote = '', i = 0;
+    while (i < src.length) {
+      var ch = src.charAt(i), nx = src.charAt(i + 1);
+      if (ch === '\n') line++;
+      if (inComment) {
+        if (ch === '*' && nx === '/') { inComment = false; i += 2; continue; }
+        i++; continue;
+      }
+      if (quote) {
+        if (ch === '\\') { i += 2; continue; }
+        if (ch === quote) quote = '';
+        i++; continue;
+      }
+      if (ch === '/' && nx === '*') { inComment = true; i += 2; continue; }
+      if (ch === '"' || ch === "'") { quote = ch; i++; continue; }
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth < 0) { errs.push(line + '번째 줄: 닫는 }가 여는 {보다 많아요'); depth = 0; }
+      }
+      i++;
+    }
+    if (inComment) errs.push('주석(/* … */)이 닫히지 않았어요');
+    if (quote) errs.push('따옴표가 닫히지 않았어요');
+    if (depth > 0) errs.push('여는 {가 ' + depth + '개 더 많아요 (중괄호가 닫히지 않았어요)');
+    var step = { key: 'css', name: '1단계 · CSS 중괄호·주석 검사', ok: !errs.length, errors: errs };
+    return { ok: step.ok, steps: [step] };
+  }
+  /* 파일 확장자에 맞는 검사를 골라요 (모르는 형식은 검사없이 통과) */
+  function checkCodeFile(p, content) {
+    var path = String(p || '');
+    if (/\.html?$/i.test(path)) return checkHtml(content);
+    if (/\.json$/i.test(path)) return checkJsonText(content);
+    if (/\.[cm]?js$/i.test(path)) return checkJsText(content);
+    if (/\.css$/i.test(path)) return checkCssText(content);
+    return { steps: [], ok: true, skipped: true };
   }
 
   /* ============ 줄 비교(diff) ============ */
@@ -4398,7 +4610,8 @@ var QR = (function () {
     lines.push('- 찾기·읽기가 같이 필요하면 같은 답변에 도구 호출을 여러 개 넣어 한 번에 처리해라. 그래야 단계를 아끼고 code_edit까지 빨리 간다.');
     lines.push('- 정해진 단계 수(12번) 안에 끝내라. 10단계쯤에서 아직 못 찾았으면 읽은 내용으로 가장 좋은 수정을 내거나, 무엇이 막혔는지 짧게 말한다.');
     lines.push('- code_read는 200줄 이하의 작은 파일에만 쓴다. 650KB짜리 파일을 content로 통째로 쓰면 안 된다.');
-    lines.push('- old_string은 파일에 있는 글자와 정확히 같아야 한다(공백·들여쓰기 포함). 찾지 못하면 search_code로 다시 확인한다.');
+    lines.push('- old_string은 파일의 글자와 같게 쓴다. 들여쓰기·공백만 다르면 파일 안에서 딱 한 곳일 때 자동으로 맞춰 주지만, 두 곳 이상이면 어디를 바꿀지 고를 수 없으니 앞뒤 줄을 넣어 한 곳만 남긴다.');
+    lines.push('- old_string을 찾지 못하면 오류에 “가장 비슷한 줄”의 줄 번호와 실제 글이 나온다. 그것을 그대로 복사해 다시 낸다.');
     lines.push('- 저장과 배포는 도현님이 [저장]·[반영하기]를 눌러야만 실제로 일어난다. 네가 눌렀다고 말하지 않는다.');
     lines.push('- 비밀번호·토큰·API 키는 절대 답변에 쓰거나 물어보지 않는다.');
     lines.push('- 확인하지 않은 사실을 지어내지 않는다. 모르면 모른다고 말한다.');
@@ -4493,6 +4706,9 @@ var QR = (function () {
       return;
     }
     var nudged = false;
+    var triedModel = {};
+    triedModel[id] = 1;
+    var switched = 0;
     workStart(t);
     try {
     for (var step = 0; step < 12; step++) {
@@ -4507,6 +4723,19 @@ var QR = (function () {
       }
       attach = null; /* 그림·PDF는 첫 요청에만 붙여요 (토큰 절약) */
       var res = await callWithKeys(pid, model, { system: buildSystem(t), messages: msgs }, { signal: S.busy[t.id] && S.busy[t.id].signal });
+      /* 한도(429)·혼잡(503)이면 다른 모델로 자동 전환해 같은 요청을 이어서 보내요 */
+      while (res && !res.ok && (res.status === 429 || res.status === 503)) {
+        var altBusyId = busyFallbackModel(id, triedModel);
+        if (!altBusyId || switched >= 5) break;
+        var fromShort = modelShort(id);
+        var bsp = splitModelId(altBusyId);
+        triedModel[altBusyId] = 1;
+        pid = bsp.pid; model = bsp.model; id = altBusyId;
+        switched++;
+        workStep(t, { ico: '⚡', verb: fromShort + ' 한도/혼잡 → ' + modelShort(altBusyId) + '로 자동 전환', sub: '' }, false, true);
+        toast(fromShort + ' 한도/혼잡 → ' + modelShort(altBusyId) + '로 자동 전환했어요.');
+        res = await callWithKeys(pid, model, { system: buildSystem(t), messages: msgs }, { signal: S.busy[t.id] && S.busy[t.id].signal });
+      }
       renderModelBtn();
       if (!res.ok) {
         /* 단종·없는 모델이면 목록에서 숨기고, 바로 쓸 수 있는 모델로 바꿔 이어서 답해요 */
