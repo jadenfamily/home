@@ -155,12 +155,18 @@
   .hub-tile.kids{ background:linear-gradient(155deg,#fff8e8 0%,#fff0f6 100%); border-color:#ffe2cc; }
   .hub-tile.fridge{ background:linear-gradient(155deg,#eaf7ff 0%,#f2f0ff 100%); border-color:#d9e8fb; }
   .hub-tile.ledger{ background:linear-gradient(155deg,#fffdf1 0%,#eefaf3 100%); border-color:#dceee3; }
+  .hub-tile.chat{ background:linear-gradient(155deg,#f3f0ff 0%,#eaf6ff 100%); border-color:#e0daff; }
+  .hub-tile.chat .ht-go{ color:#6a45d8; }
   .hub-tile .ht-badge{
     position:absolute; top:14px; right:14px; font-size:10.5px; font-weight:900; padding:4px 9px;
     border-radius:999px; background:#fff; color:#8a6a2f; box-shadow:0 2px 8px rgba(0,0,0,.07);
   }
   .hub-foot{ margin:2px 0 0; font-size:11.5px; font-weight:700; color:#a99c8c; line-height:1.6; text-align:center; }
 
+  @media (min-width:721px){
+    /* 카드가 4개가 되어 화면 폭에 맞춰 열 수를 정해요 (1280에서는 4열) */
+    .hub-grid{ grid-template-columns:repeat(auto-fit,minmax(248px,1fr)); }
+  }
   @media (max-width:720px){
     .hub-grid{ grid-template-columns:1fr; }
     .hub-tile{ min-height:0; flex-direction:row; align-items:center; gap:14px; padding:15px 16px; border-radius:22px; }
@@ -523,7 +529,8 @@
   var DASHBOARDS = [
     { id: 'kids', emoji: '🌟', title: "Jaden's Today", desc: '하루 루틴 · 칭찬 스티커 · 학원 시간표', kind: 'link', cls: 'kids', url: '../kids-dashboard/' },
     { id: 'fridge', emoji: '🧊', title: '냉장고 파먹기', desc: '식재료 재고 · 장보기 알림 · 주간 식단', kind: 'link', cls: 'fridge', url: '../fridge-dashboard/' },
-    { id: 'ledger', emoji: '📒', title: '가계부', desc: '수입·고정비·변동지출과 예산을 한곳에', kind: 'link', cls: 'ledger', url: '../ledger-dashboard/' }
+    { id: 'ledger', emoji: '📒', title: '가계부', desc: '수입·고정비·변동지출과 예산을 한곳에', kind: 'link', cls: 'ledger', url: '../ledger-dashboard/' },
+    { id: 'chat', emoji: '🤖', title: 'AI 비서 챗', desc: '대시보드 코드 수정 · 가족 데이터 확인 · 여러 대화방', kind: 'link', cls: 'chat', url: 'chat.html', adminOnly: true }
   ];
 
   /* 계정별로 갈 수 있는 대시보드 (관리자는 언제나 전부) */
@@ -814,7 +821,8 @@
     var html = '';
     for (var i = 0; i < DASHBOARDS.length; i++) {
       var d = DASHBOARDS[i];
-      if (allowed.indexOf(d.id) < 0) continue; /* 이 계정이 갈 수 있는 곳만 보여 줘요 */
+      /* 이 계정이 갈 수 있는 곳만 보여 줘요. AI 비서 챗은 관리자에게만 보여요 */
+      if (d.adminOnly ? !isAdmin() : allowed.indexOf(d.id) < 0) continue;
       var badge = (d.kind !== 'soon' && last === d.id) ? '<span class="ht-badge">최근 사용</span>' : '';
       var body = '<span class="ht-emoji" aria-hidden="true">' + d.emoji + '</span>' +
         '<span class="ht-body"><span class="ht-title">' + esc(d.title) + '</span>' +
