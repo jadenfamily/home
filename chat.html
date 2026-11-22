@@ -129,7 +129,7 @@
   }
   .msg.me{ flex-direction:row-reverse; }
   .msg.me .bubble{ background:#312a4d; color:#fff; border-bottom-right-radius:6px; }
-  .msg.bot .bubble{ border-bottom-left-radius:6px; background:var(--bot-bg, #fff); color:var(--bot-fg, inherit); }
+  .msg.bot .bubble{ background:var(--bot-bg,#fff); color:var(--bot-fg,#222); border-bottom-left-radius:6px; }
   .bubble p{ margin:0 0 8px; }
   .bubble p:last-child{ margin-bottom:0; }
   .bubble code{ background:rgba(124,92,252,.10); padding:1px 5px; border-radius:6px; font-size:.9em; }
@@ -5223,11 +5223,13 @@ var QR = (function () {
       '<label class="field">보낼 요청<textarea id="qNewPrompt" placeholder="예: 오늘 아이 루틴과 내일 일정을 보고 짧게 정리해 줘."></textarea></label>' +
       '<button class="btn ghost" type="button" data-act="quick-add">버튼 추가</button></div>';
 
-    h += '<div class="sec"><h3>🎨 AI 말풍선 색상</h3><p class="hint">챗봇(AI) 말풍선의 배경색과 글자색을 취향에 맞게 바꿔보세요.</p>' +
-      '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">' +
-      '<label class="field" style="flex:1;min-width:140px">배경색<input type="color" id="setBotBg" value="' + esc(localStorage.getItem('jaden_bot_bg') || '#ffffff') + '" style="height:40px;padding:2px;cursor:pointer"></label>' +
-      '<label class="field" style="flex:1;min-width:140px">글자색<input type="color" id="setBotFg" value="' + esc(localStorage.getItem('jaden_bot_fg') || '#111111') + '" style="height:40px;padding:2px;cursor:pointer"></label>' +
-      '</div><button class="btn" type="button" data-act="save-bot-color">색상 저장</button></div>';
+    h += '<div class="sec"><h3>🎨 AI 말풍선 색상</h3><p class="hint">AI 챗봇의 말풍선 배경색과 글자색을 취향에 맞게 바꿔보세요.</p>' +
+      '<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;">' +
+      '<label style="display:flex;align-items:center;gap:6px;font-size:13px;">배경색 <input type="color" id="setBotBg" value="' + esc(S.pref.botBg || '#ffffff') + '" style="width:36px;height:32px;border:none;cursor:pointer;background:none;"></label>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-size:13px;">글자색 <input type="color" id="setBotFg" value="' + esc(S.pref.botFg || '#222222') + '" style="width:36px;height:32px;border:none;cursor:pointer;background:none;"></label>' +
+      '<button class="btn ghost" type="button" data-act="bot-color-reset" style="padding:4px 10px;font-size:13px;">기본값</button>' +
+      '</div>' +
+      '<button class="btn" type="button" data-act="save-bot-color">색상 저장</button></div>';
 
     h += '<div class="sec"><h3>📱 등록된 기기</h3><p class="hint">여기 있는 기기에서만 AI 비서 챗이 열려요. 잃어버린 기기는 바로 해제하세요.</p>';    if (!S.devices || !S.devices.length) {
       h += '<p class="empty-lock">아직 등록된 기기가 없어요.</p>';
