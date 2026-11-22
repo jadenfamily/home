@@ -2203,7 +2203,10 @@ var QR = (function () {
       model: String(j.model || ''),
       instructions: String(j.instructions || ''),
       quick: Object.prototype.toString.call(j.quick) === '[object Array]' ? j.quick : [],
-      autoLock: autoLockValid(j.autoLock)
+      autoLock: autoLockValid(j.autoLock),
+      /* AI 말풍선 색 — 값이 없으면 CSS 기본색을 그대로 써요 (예전 저장값도 읽어요) */
+      botBg: normHexColor(j.botBg) || normHexColor(lsGet('jaden_bot_bg')) || '',
+      botFg: normHexColor(j.botFg) || normHexColor(lsGet('jaden_bot_fg')) || ''
     };
     if (!S.pref.quick.length) S.pref.quick = DEFAULT_QUICK.slice();
     var lim = null;
@@ -2213,6 +2216,56 @@ var QR = (function () {
   function savePref() {
     lsSet(K_PREF, JSON.stringify(S.pref));
     lsSet(K_LIMITS, JSON.stringify(S.limits));
+  }
+
+  /* ============ 🎨 AI 말풍선 색 ============ */
+  /* #rgb · #rrggbb만 통과시켜요 (CSS 변수에 그대로 들어가니 이상한 값은 버려요) */
+  function normHexColor(v) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s) return '';
+    if (s.charAt(0) !== '#') s = '#' + s;
+    if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+      s = '#' + s.charAt(1) + s.charAt(1) + s.charAt(2) + s.charAt(2) + s.charAt(3) + s.charAt(3);
+    }
+    if (!/^#[0-9a-fA-F]{6}$/.test(s)) return '';
+    return s.toLowerCase();
+  }
+  function applyBotColor() {
+    var root = document.documentElement;
+    if (!root || !root.style) return;
+    var bg = normHexColor(S.pref && S.pref.botBg);
+    var fg = normHexColor(S.pref && S.pref.botFg);
+    if (bg) root.style.setProperty('--bot-bg', bg); else root.style.removeProperty('--bot-bg');
+    if (fg) root.style.setProperty('--bot-fg', fg); else root.style.removeProperty('--bot-fg');
+  }
+  /* 설정 창에서 색을 고르는 동안 미리 보기 (저장 전에는 적용만, 닫으면 저장된 값으로 돌아와요) */
+  function previewBotColor() {
+    var root = document.documentElement;
+    if (!root || !root.style) return;
+    var bg = normHexColor(fieldVal('setBotBg'));
+    var fg = normHexColor(fieldVal('setBotFg'));
+    if (bg) root.style.setProperty('--bot-bg', bg); else root.style.removeProperty('--bot-bg');
+    if (fg) root.style.setProperty('--bot-fg', fg); else root.style.removeProperty('--bot-fg');
+  }
+  function saveBotColor() {
+    S.pref.botBg = normHexColor(fieldVal('setBotBg'));
+    S.pref.botFg = normHexColor(fieldVal('setBotFg'));
+    savePref();
+    applyBotColor();
+    saveSoon(0);
+    toast('AI 말풍선 색상을 저장했어요.');
+  }
+  function resetBotColor() {
+    S.pref.botBg = '';
+    S.pref.botFg = '';
+    savePref();
+    applyBotColor();
+    var b = document.getElementById('setBotBg');
+    var f = document.getElementById('setBotFg');
+    if (b) b.value = '#ffffff';
+    if (f) f.value = '#222222';
+    saveSoon(0);
+    toast('기본 색상으로 되돌렸어요.');
   }
 
   var DEFAULT_QUICK = [
@@ -2318,6 +2371,8 @@ var QR = (function () {
       if (obj.pref.instructions) S.pref.instructions = String(obj.pref.instructions);
       if (Object.prototype.toString.call(obj.pref.quick) === '[object Array]' && obj.pref.quick.length) S.pref.quick = obj.pref.quick;
       if (obj.pref.model) S.pref.model = String(obj.pref.model);
+      if (obj.pref.botBg !== undefined) S.pref.botBg = normHexColor(obj.pref.botBg);
+      if (obj.pref.botFg !== undefined) S.pref.botFg = normHexColor(obj.pref.botFg);
     }
     S.proposals = {};
     if (obj.proposals && typeof obj.proposals === 'object') {
@@ -2381,7 +2436,8 @@ var QR = (function () {
         threads: S.threads,
         proposals: keepProps,
         pending: keepWrites,
-        pref: { model: S.pref.model, instructions: S.pref.instructions, quick: S.pref.quick }
+        pref: { model: S.pref.model, instructions: S.pref.instructions, quick: S.pref.quick,
+                botBg: S.pref.botBg, botFg: S.pref.botFg }
       };
       return chatEncrypt(JSON.stringify(body)).then(function (env) {
         return ghPutAt(DEFAULT_REPO, threadsPath(), JSON.stringify(env, null, 2), 'AI 비서 챗 대화 저장');
@@ -4031,6 +4087,7 @@ var QR = (function () {
     renderThreadBar();
     renderQuick();
     renderModelBtn();
+    applyBotColor();
 
     var ai = await loadAiConfig();
     var tr = await loadThreads();
@@ -4043,6 +4100,7 @@ var QR = (function () {
     renderThread();
     renderQuick();
     renderModelBtn();
+    applyBotColor();
     setSaveState('idle');
     if (ai.locked) toast('AI 설정을 열지 못했어요. 설정에서 키를 다시 저장해 주세요.');
     /* 모델 목록은 조용히 새로 고쳐요 */
@@ -4173,7 +4231,7 @@ var QR = (function () {
     h += checkStepsHtml(p.check);
     h += diffHtml(p.diff);
     if (done) {
-      h += '<div class="card-actions"><span style="font-size:12.5px;font-weight:900;color:#0f7a55">✅ 반영했어요. 1~2분 뒤 화면에 나타나요.</span></div>';
+      h += '<div class="card-actions"><span style="font-size:12.5px;font-weight:900;color:#0f7a55">✅ 저장소에 반영했어요! 실제 화면에는 1분쯤 뒤에 적용되니 잠시 후 새로고침해 주세요.</span></div>';
     } else if (p.state === 'committing') {
       h += '<div class="card-actions"><span style="font-size:12.5px;font-weight:900;color:#6a45d8">반영하는 중…</span></div>';
     } else {
@@ -4572,7 +4630,7 @@ var QR = (function () {
     var r = await ghPutAt(p.repo, p.path, p.content, msg, S.ai.codeToken);
     if (!r.ok) { p.state = 'pending'; p.error = r.error || '반영하지 못했어요'; toast('반영하지 못했어요'); renderThread(); return; }
     p.state = 'done';
-    toast('반영했어요. 1~2분 뒤 화면에 나타나요.');
+    toast('저장소에 반영했어요! 실제 화면에는 1분쯤 뒤에 적용되니 잠시 후 새로고침해 주세요.');
     renderThread();
     saveSoon(0);
   }
@@ -4612,7 +4670,8 @@ var QR = (function () {
     var text = '방금 제안한 ' + p.repo + '/' + p.path + ' 수정안에서 자동 검사 오류가 났어: ' + (errs.join(' / ') || '알 수 없는 오류') + '. 파일 전체를 다시 읽고 고쳐서 code_edit로 다시 제안해 줘.';
     renderThreadBar();
     renderThread();
-    sendMessage(text);
+    /* 사용자가 [AI에게 고쳐 달라고 하기]를 눌러 보낸 말이라 이미 승인된 이어가기로 봐요 */
+    sendMessage(text, { approved: true });
   }
 
   /* ============ AI 대화 처리 ============ */
@@ -4655,6 +4714,7 @@ var QR = (function () {
     lines.push('- 확인한 뒤 “어느 파일(repo/path)의 어떤 부분을 어떻게 바꿀지”를 짧게 설명하고 “이대로 진행할까요?”라고 묻는다. 이 답변에서는 도구를 부르지 않는다.');
     lines.push('- 사용자가 “응·진행해·ㄱㄱ·좋아”처럼 분명히 승인하면, 그다음 답변에서 다시 묻지 말고 곧바로 code_edit·family_save를 부른다.');
     lines.push('- 승인 전에는 code_edit·family_save를 절대 부르지 않는다. 승인 없이 고치면 실패한 수정이 끝난 것처럼 보인다.');
+    lines.push('- 이 규칙은 코드로도 막혀 있다. 승인 전에 code_edit·family_save를 부르면 실행되지 않고 “아직 사용자 승인을 받지 않았어요” 안내만 돌아온다.');
     lines.push('- 이미 승인받아 이어서 하는 중이면 같은 확인을 되풀이하지 않는다. 요청이 바뀌었거나 새 작업이면 다시 계획을 보이고 확인받는다.');
     lines.push('- 도구를 부르는 중간 턴에는 “바꿨다·완료했다·이렇게 확인하세요” 같은 결과 보고를 미리 쓰지 않는다. 실제 도구 실행이 끝난 마지막 답변에서만 실제 결과대로 쓰고, 도구가 실패했으면 실패한 그대로 말한다.');
     lines.push('');
@@ -4738,6 +4798,73 @@ var QR = (function () {
     if (!s) return false;
     return /(진행할까요|진행해\s?도|진행할까|해\s?도\s?될까요|괜찮을까요|승인해\s?주시면|확인해\s?주시면|허락해\s?주시면|할까요\?)/.test(s);
   }
+
+  /* ============ 승인 전 수정·저장 하드 게이트 ============ */
+  /* 경량 모델이 프롬프트 규칙을 무시하고 승인 없이 code_edit·family_save를 부를 때
+     코드 수준에서 막아요. 편집·저장은 실제로 일어나지 않고, 모델에게만 안내가 돌아가요. */
+  var GATE_TOOLS = { code_edit: 1, family_save: 1 };
+  var GATE_BLOCK_TEXT = '아직 사용자 승인을 받지 않았어요. 먼저 읽기 도구로만 확인한 뒤 "어느 파일의 무엇을 어떻게 바꿀지" 설명하고 "이대로 진행할까요?"로 확인을 받으세요.';
+  var APPROVAL_HEADS = ['응', '응응', 'ㅇㅇ', 'ㅇㅋ', 'ㅇㅋㅇㅋ', '어', '넹', '넵', '네', '네네', '예', '예예',
+    '옙', '좋아', '좋아요', '좋네', '좋습니다', '진행', '진행해', '진행해줘', '진행시켜', '진행하자', '고고',
+    'ㄱㄱ', '가', '가자', '해', '해줘', '해주세요', '해줄래', '해봐', '해보자', '수정해', '수정해줘', '바꿔',
+    '바꿔줘', '고쳐', '고쳐줘', '반영해', '반영해줘', '승인', '오케이', '오키', 'ok', 'okay', 'yes', 'yep',
+    '그래', '그래줘', '그렇게', '그렇게해', '맞아', '맞아요', '맞습니다', '콜', '굿', 'good', 'go', 'do', 'doit'];
+  var APPROVAL_NO = /(안\s?돼|안\s?해|하지\s?마|하지마|취소|아니|아뇨|됐어|됬어|그만|멈춰|멈춰줘|기다려|잠깐|나중|보류|no|nope|stop|cancel|wait)/;
+
+  function normAnswerText(s) {
+    return String(s || '').replace(/[~!.,\u2026"'“”‘’()\[\]{}]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+  /* 짧은 긍정·진행 지시인지 ("응", "ㅇㅇ", "좋아 진행해", "수정해줘") */
+  function isApprovalText(s) {
+    var raw = String(s || '');
+    if (!raw) return false;
+    if (/[?？]/.test(raw)) return false;
+    var t = normAnswerText(raw);
+    if (!t) return false;
+    if (APPROVAL_NO.test(t)) return false;
+    var words = t.split(' ');
+    if (APPROVAL_HEADS.indexOf(words[0]) >= 0) return true;
+    if (/^(응|응응|어|네|예|좋아|그래|오케이|ok|yes)\s/.test(t) &&
+        /(진행|해\s?줘|해\s?주세요|수정|바꿔|고쳐|반영|그렇게)/.test(t)) return true;
+    return false;
+  }
+  /* AI 답변이 계획 설명·확인 질문이었는지 (? 포함도 확인 질문으로 봐요) */
+  function isPlanQuestion(text) {
+    var s = String(text || '');
+    if (!s) return false;
+    if (/[?？]/.test(s)) return true;
+    if (asksForApproval(s)) return true;
+    return /(진행할까요|바꿀까요|수정할까요|고칠까요|해\s?드릴까요|해도\s?될까요|괜찮을까요|승인해\s?주시|확인해\s?주시|허락해\s?주시)/.test(s);
+  }
+  /* 이번 차례에 수정·저장을 해도 되는지: 직전 AI 답변이 확인 질문이고, 그 뒤 사용자가 승인했을 때만 */
+  function approvalGateState(t) {
+    var msgs = (t && t.messages) || [];
+    var ui = -1;
+    for (var i = msgs.length - 1; i >= 0; i--) {
+      var m = msgs[i];
+      if (m && m.role === 'user' && !m.nudge) { ui = i; break; }
+    }
+    if (ui < 0) return { ok: false, why: 'nouser' };
+    /* 앱이 사용자의 버튼을 받아 보낸 이어가기 메시지(고쳐 달라고 하기 등)는 승인으로 봐요 */
+    if (msgs[ui].approved === true) return { ok: true, why: 'button' };
+    if (!isApprovalText(msgs[ui].text)) return { ok: false, why: 'notapproval' };
+    var plan = null;
+    for (var j = ui - 1; j >= 0; j--) {
+      if (msgs[j] && msgs[j].role === 'assistant' && !msgs[j].error) { plan = msgs[j]; break; }
+    }
+    if (!plan) return { ok: false, why: 'noplan' };
+    if (!isPlanQuestion(plan.text)) return { ok: false, why: 'noplan' };
+    return { ok: true, why: 'approved' };
+  }
+  function approvalBlockedResult(state) {
+    var hint = '';
+    if (state && state.why === 'noplan') hint = '\n(직전 내 답변이 “이대로 진행할까요?” 같은 확인 질문이 아니었어요.)';
+    else if (state && state.why === 'notapproval') hint = '\n(사용자의 마지막 메시지는 승인이 아니었어요.)';
+    return {
+      text: GATE_BLOCK_TEXT + hint + '\n읽기 도구(search_code·read_code_slice·code_read·code_list·family_data)는 지금도 바로 쓸 수 있어요.',
+      label: '승인 확인 필요'
+    };
+  }
   /* 중간 턴의 글을 작업 타임라인 한 줄로 줄여요 */
   function plainBrief(text) {
     var s = String(text || '').replace(/\s+/g, ' ').trim();
@@ -4776,6 +4903,7 @@ var QR = (function () {
     var triedModel = {};
     triedModel[id] = 1;
     var switched = 0;
+    var blockedEdits = 0;
     workStart(t);
     try {
     for (var step = 0; step < 12; step++) {
@@ -4864,15 +4992,28 @@ var QR = (function () {
         } else {
           /* 저장소 이름·경로가 전체 주소나 owner/repo로 와도 도구가 알아듣게 다듬어요 */
           var toolArgs = normalizeToolArgs(one.name, one.args || {});
-          workStep(t, toolStep(one.name, toolArgs, null), false, true);
-          try {
-            out = await tool.run(toolArgs, { threadId: t.id });
-          } catch (e) {
-            out = { text: '도구를 실행하지 못했어요: ' + (e && e.message ? e.message : ''), label: '오류' };
+          var gateState = GATE_TOOLS[one.name] ? approvalGateState(t) : null;
+          if (gateState && !gateState.ok) {
+            /* 승인 전에는 실제 편집·저장을 하지 않아요 (도구 결과만 돌려줘요) */
+            blockedEdits++;
+            out = approvalBlockedResult(gateState);
+            workStep(t, { ico: '🚫', verb: '승인 확인 필요', sub: toolStep(one.name, toolArgs, null).sub }, false, true);
+            workRelabel(t, { ico: '🚫', verb: '승인 확인 필요', sub: toolStep(one.name, toolArgs, null).sub + ' · 실행하지 않음' });
+          } else {
+            workStep(t, toolStep(one.name, toolArgs, null), false, true);
+            try {
+              out = await tool.run(toolArgs, { threadId: t.id });
+            } catch (e) {
+              out = { text: '도구를 실행하지 못했어요: ' + (e && e.message ? e.message : ''), label: '오류' };
+            }
+            workRelabel(t, toolStep(one.name, toolArgs, out));
           }
-          workRelabel(t, toolStep(one.name, toolArgs, out));
         }
         addMsg(t, { role: 'tool', tool: one.name, label: out.label || one.name, text: out.text || '', card: out.card || null, callId: one.id || '', quiet: !!out.quiet, info: out.info || null });
+      }
+      if (blockedEdits >= 3) {
+        addMsg(t, { role: 'assistant', text: '승인을 받기 전에 바로 고치려고 해서 멈췄어요. 무엇을 어떻게 바꿀지 한 번 더 말씀해 주시면 그때 진행할게요.' });
+        return;
       }
       workStep(t, { ico: '🧠', verb: '결과로 답 만드는 중', sub: '' }, true);
       if (S.active === t.id) renderThread();
@@ -4886,7 +5027,7 @@ var QR = (function () {
     }
   }
 
-  async function sendMessage(text) {
+  async function sendMessage(text, opts) {
     var t = activeThread();
     if (!t) return;
     var body = String(text == null ? fieldVal('input') : text).trim();
@@ -4899,7 +5040,9 @@ var QR = (function () {
     S.scrollNext = true;
     touchActivity();
     var rq = (S.reply && S.reply[t.id]) ? S.reply[t.id] : null;
-    addMsg(t, { role: 'user', text: body, replyTo: rq ? { id: rq.id, role: rq.role, text: rq.text } : null });
+    var um = { role: 'user', text: body, replyTo: rq ? { id: rq.id, role: rq.role, text: rq.text } : null };
+    if (opts && opts.approved) um.approved = true;
+    addMsg(t, um);
     if (rq) { delete S.reply[t.id]; renderQuoteBar(); }
     if (!t.title || t.title === '새 대화') { t.title = body.slice(0, 22) + (body.length > 22 ? '…' : ''); }
     var input = document.getElementById('input');
@@ -5156,7 +5299,10 @@ var QR = (function () {
       var typed = false;
       try {
         var els = document.querySelectorAll('#settingsBody input, #settingsBody textarea');
-        for (var i = 0; i < els.length; i++) if (String(els[i].value || '').length) { typed = true; break; }
+        for (var i = 0; i < els.length; i++) {
+          if (els[i].type === 'color') continue; /* 색 고르는 칸은 늘 값이 있어서 건너뜨려요 */
+          if (String(els[i].value || '').length) { typed = true; break; }
+        }
       } catch (e) { typed = false; }
       if (!typed) renderSettings();
     }).catch(function () { /* 무시 */ });
@@ -5164,6 +5310,8 @@ var QR = (function () {
   function closeSettings() {
     var m = document.getElementById('settingsModal');
     if (m) m.hidden = true;
+    /* 저장하지 않고 닫았으면 미리 보기 색을 저장된 값으로 되돌려요 */
+    if (typeof applyBotColor === 'function') applyBotColor();
   }
 
   function renderSettings() {
@@ -5225,8 +5373,8 @@ var QR = (function () {
 
     h += '<div class="sec"><h3>🎨 AI 말풍선 색상</h3><p class="hint">AI 챗봇의 말풍선 배경색과 글자색을 취향에 맞게 바꿔보세요.</p>' +
       '<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;">' +
-      '<label style="display:flex;align-items:center;gap:6px;font-size:13px;">배경색 <input type="color" id="setBotBg" value="' + esc(S.pref.botBg || '#ffffff') + '" style="width:36px;height:32px;border:none;cursor:pointer;background:none;"></label>' +
-      '<label style="display:flex;align-items:center;gap:6px;font-size:13px;">글자색 <input type="color" id="setBotFg" value="' + esc(S.pref.botFg || '#222222') + '" style="width:36px;height:32px;border:none;cursor:pointer;background:none;"></label>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-size:13px;">배경색 <input type="color" id="setBotBg" value="' + esc(S.pref.botBg || '#ffffff') + '" style="width:44px;height:34px;padding:0;border:1px solid rgba(0,0,0,.12);border-radius:9px;cursor:pointer;background:none;"></label>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-size:13px;">글자색 <input type="color" id="setBotFg" value="' + esc(S.pref.botFg || '#222222') + '" style="width:44px;height:34px;padding:0;border:1px solid rgba(0,0,0,.12);border-radius:9px;cursor:pointer;background:none;"></label>' +
       '<button class="btn ghost" type="button" data-act="bot-color-reset" style="padding:4px 10px;font-size:13px;">기본값</button>' +
       '</div>' +
       '<button class="btn" type="button" data-act="save-bot-color">색상 저장</button></div>';
@@ -5474,6 +5622,8 @@ var QR = (function () {
 
   document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'input') autoGrow(e.target);
+    /* 설정 창에서 AI 말풍선 색을 고르는 즉시 미리 보기 */
+    if (e.target && (e.target.id === 'setBotBg' || e.target.id === 'setBotFg')) previewBotColor();
     /* 인증 앱·아이폰 암호가 6자리를 채워 주면 바로 확인해요 */
     if (e.target && e.target.id === 'gateTotp') {
       var digits = String(e.target.value || '').replace(/\D/g, '').slice(0, 6);
@@ -5642,6 +5792,8 @@ var QR = (function () {
     }
     if (act === 'save-code') { saveCodeToken(); return; }
     if (act === 'save-instructions') { saveInstructions(); return; }
+    if (act === 'save-bot-color') { saveBotColor(); return; }
+    if (act === 'bot-color-reset') { resetBotColor(); return; }
     if (act === 'key-add') { addProviderKey(el.getAttribute('data-pid')); return; }
     if (act === 'key-del') { removeProviderKey(el.getAttribute('data-pid'), Number(el.getAttribute('data-i'))); return; }
     if (act === 'key-use') { useProviderKey(el.getAttribute('data-pid'), Number(el.getAttribute('data-i'))); return; }
@@ -5674,6 +5826,7 @@ var QR = (function () {
     S.conn = loadDevice();
     S.users = loadUsersCache();
     loadPref();
+    applyBotColor();
     if (!S.conn) { showGate('noconn'); return; }
     var sess = loadSession();
     if (!sess) { showGate('noauth'); return; }
