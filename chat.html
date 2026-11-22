@@ -3932,8 +3932,8 @@ var QR = (function () {
       return null;
     }
 
-    /* A의 a0~a1줄과 B의 b0~b1줄을 비교해 rows에 쌓아요 */
-    function align(a0, a1, b0, b1) {
+    /* A의 a0~a1줄과 B의 b0~b1줄을 비교해 rows에 쌓아요 (depth는 너무 깊이 들어가지 않게 하는 안전장치) */
+    function align(a0, a1, b0, b1, depth) {
       while (a0 < a1 && b0 < b1 && A[a0] === B[b0]) { rows.push({ t: ' ', s: A[a0] }); a0++; b0++; }
       if (a0 >= a1 || b0 >= b1) {
         while (a0 < a1) { rows.push({ t: '-', s: A[a0] }); a0++; }
@@ -3946,11 +3946,11 @@ var QR = (function () {
       if (ea - a0 <= LIMIT && eb - b0 <= LIMIT) {
         lcsRows(a0, ea, b0, eb);
       } else {
-        var at = anchor(a0, ea, b0, eb);
+        var at = depth < 30 ? anchor(a0, ea, b0, eb) : null;
         if (at) {
-          align(a0, at.ai, b0, at.bi);
+          align(a0, at.ai, b0, at.bi, depth + 1);
           rows.push({ t: ' ', s: A[at.ai] });
-          align(at.ai + 1, ea, at.bi + 1, eb);
+          align(at.ai + 1, ea, at.bi + 1, eb, depth + 1);
         } else {
           /* 나눌 기준 줄이 없을 때만 앞에서부터 1,600줄씩 비교하고, 나머지는 바뀐 줄로 세요 */
           var ca = Math.min(ea, a0 + LIMIT), cb = Math.min(eb, b0 + LIMIT);
@@ -3964,7 +3964,7 @@ var QR = (function () {
       for (t = ea; t < a1; t++) rows.push({ t: ' ', s: A[t] });
     }
 
-    align(0, n, 0, m);
+    align(0, n, 0, m, 0);
 
     /* 바뀐 줄 수는 화면에 몇 줄을 보여 주든 전체에서 정확히 세요 */
     var added = restAdded, removed = restRemoved;
