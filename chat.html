@@ -3878,41 +3878,117 @@ var QR = (function () {
   }
 
   /* ============ 줄 비교(diff) ============ */
+  /* 17,000줄짜리 화면의 뒷부분만 고쳐도 그 수정이 잡히도록,
+     앞·뒤에서 똑같은 줄은 비교에서 빼고 실제로 달라진 가운데만 비교해요.
+     가운데가 아주 크면 양쪽에 똑같이 있는 줄(기준 줄)에서 한 번씩 나눠 비교하고,
+     나눌 줄이 없을 때만 1,600줄 상한을 둬요.
+     (예전에는 무조건 1,600줄에서 잘라 버려서 그 뒤쪽 수정이 +0 · -0으로 보였어요) */
   function diffLines(a, b) {
-    var A = String(a || '').split('\n'), B = String(b || '').split('\n');
-    if (A.length > 1600) A = A.slice(0, 1600).concat(['… (앞부분만 비교)']);
-    if (B.length > 1600) B = B.slice(0, 1600).concat(['… (앞부분만 비교)']);
+    /* 빈 내용은 ‘빈 줄 1개’가 아니라 0줄로 봐요 (새 파일을 만들 때 −1로 보이지 않게) */
+    var A = (a === '' || a == null) ? [] : String(a).split('\n');
+    var B = (b === '' || b == null) ? [] : String(b).split('\n');
     var n = A.length, m = B.length;
-    var dp = [];
-    for (var i = 0; i <= n; i++) { dp.push(new Array(m + 1).fill(0)); }
-    for (i = n - 1; i >= 0; i--) {
-      for (var j = m - 1; j >= 0; j--) {
-        dp[i][j] = (A[i] === B[j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    var LIMIT = 1600, cut = 0, rows = [], restAdded = 0, restRemoved = 0;
+    var CTX = 2;   /* 바뀐 줄 앞뒤로 보여 줄 문맥 줄 수 */
+
+    /* 작은 구간은 LCS로 줄 단위 최소 변경을 찾아요 */
+    function lcsRows(a0, a1, b0, b1) {
+      var na = a1 - a0, nb = b1 - b0, i, j;
+      var dp = [];
+      for (i = 0; i <= na; i++) { dp.push(new Array(nb + 1).fill(0)); }
+      for (i = na - 1; i >= 0; i--) {
+        for (j = nb - 1; j >= 0; j--) {
+          dp[i][j] = (A[a0 + i] === B[b0 + j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+        }
       }
+      var i2 = 0, j2 = 0;
+      while (i2 < na && j2 < nb) {
+        if (A[a0 + i2] === B[b0 + j2]) { rows.push({ t: ' ', s: A[a0 + i2] }); i2++; j2++; }
+        else if (dp[i2 + 1][j2] >= dp[i2][j2 + 1]) { rows.push({ t: '-', s: A[a0 + i2] }); i2++; }
+        else { rows.push({ t: '+', s: B[b0 + j2] }); j2++; }
+      }
+      while (i2 < na) { rows.push({ t: '-', s: A[a0 + i2] }); i2++; }
+      while (j2 < nb) { rows.push({ t: '+', s: B[b0 + j2] }); j2++; }
     }
-    var rows = [], i2 = 0, j2 = 0;
-    while (i2 < n && j2 < m) {
-      if (A[i2] === B[j2]) { rows.push({ t: ' ', s: A[i2] }); i2++; j2++; }
-      else if (dp[i2 + 1][j2] >= dp[i2][j2 + 1]) { rows.push({ t: '-', s: A[i2] }); i2++; }
-      else { rows.push({ t: '+', s: B[j2] }); j2++; }
+
+    /* 두 구간에서 한 번씩만 나오는 같은 줄을 가운데 기준으로 하나 찾아요 (없으면 null) */
+    function anchor(a0, a1, b0, b1) {
+      var idx = {}, j, key;
+      for (j = b0; j < b1; j++) {
+        key = '#' + B[j];
+        if (idx[key] === undefined) idx[key] = j;
+        else if (idx[key] !== -1) idx[key] = -1;   /* 두 번 나오는 줄은 기준으로 쓰지 않아요 */
+      }
+      var mid = Math.floor((a0 + a1) / 2), half = Math.floor((a1 - a0) / 2);
+      for (var d = 0; d <= half; d++) {
+        for (var side = 0; side < 2; side++) {
+          var i = side ? mid + d : mid - d;
+          if (i < a0 || i >= a1) continue;
+          j = idx['#' + A[i]];
+          if (j === undefined || j < 0) continue;
+          return { ai: i, bi: j };
+        }
+      }
+      return null;
     }
-    while (i2 < n) { rows.push({ t: '-', s: A[i2] }); i2++; }
-    while (j2 < m) { rows.push({ t: '+', s: B[j2] }); j2++; }
-    /* 바뀐 곳 주변만 남기고 앞뒤는 2줄씩만 */
+
+    /* A의 a0~a1줄과 B의 b0~b1줄을 비교해 rows에 쌓아요 */
+    function align(a0, a1, b0, b1) {
+      while (a0 < a1 && b0 < b1 && A[a0] === B[b0]) { rows.push({ t: ' ', s: A[a0] }); a0++; b0++; }
+      if (a0 >= a1 || b0 >= b1) {
+        while (a0 < a1) { rows.push({ t: '-', s: A[a0] }); a0++; }
+        while (b0 < b1) { rows.push({ t: '+', s: B[b0] }); b0++; }
+        return;
+      }
+      /* 뒤에서 똑같은 줄은 미뤄 두고 가운데부터 비교해요 */
+      var ea = a1, eb = b1, t;
+      while (ea > a0 && eb > b0 && A[ea - 1] === B[eb - 1]) { ea--; eb--; }
+      if (ea - a0 <= LIMIT && eb - b0 <= LIMIT) {
+        lcsRows(a0, ea, b0, eb);
+      } else {
+        var at = anchor(a0, ea, b0, eb);
+        if (at) {
+          align(a0, at.ai, b0, at.bi);
+          rows.push({ t: ' ', s: A[at.ai] });
+          align(at.ai + 1, ea, at.bi + 1, eb);
+        } else {
+          /* 나눌 기준 줄이 없을 때만 앞에서부터 1,600줄씩 비교하고, 나머지는 바뀐 줄로 세요 */
+          var ca = Math.min(ea, a0 + LIMIT), cb = Math.min(eb, b0 + LIMIT);
+          lcsRows(a0, ca, b0, cb);
+          cut += (ea - ca) + (eb - cb);
+          restRemoved += ea - ca;
+          restAdded += eb - cb;
+          rows.push({ t: '·', s: '… (' + cut + '줄은 비교하지 않았어요)' });
+        }
+      }
+      for (t = ea; t < a1; t++) rows.push({ t: ' ', s: A[t] });
+    }
+
+    align(0, n, 0, m);
+
+    /* 바뀐 줄 수는 화면에 몇 줄을 보여 주든 전체에서 정확히 세요 */
+    var added = restAdded, removed = restRemoved;
+    for (var q = 0; q < rows.length; q++) {
+      if (rows[q].t === '+') added++;
+      else if (rows[q].t === '-') removed++;
+    }
+    /* 바뀐 곳 주변만 남기고, 건너뛴 줄은 “N줄 그대로”로 접어요 */
     var keep = [];
     for (var k = 0; k < rows.length; k++) {
       if (rows[k].t === ' ') continue;
-      for (var d = Math.max(0, k - 2); d <= Math.min(rows.length - 1, k + 2); d++) keep[d] = 1;
+      for (var d2 = Math.max(0, k - CTX); d2 <= Math.min(rows.length - 1, k + CTX); d2++) keep[d2] = 1;
     }
-    var out = [], skipped = 0, added = 0, removed = 0;
+    var out = [], skipped = 0, truncated = false;
     for (k = 0; k < rows.length; k++) {
-      if (rows[k].t === '+') added++;
-      if (rows[k].t === '-') removed++;
       if (!keep[k]) { skipped++; continue; }
       if (skipped) { out.push({ t: '·', s: '… ' + skipped + '줄 그대로 …' }); skipped = 0; }
       out.push(rows[k]);
-      if (out.length > 260) { out.push({ t: '·', s: '… (나머지 생략)' }); break; }
+      if (out.length > 260) {
+        out.push({ t: '·', s: '… (나머지 생략' + (cut ? ' · ' + cut + '줄은 비교하지 않았어요' : '') + ')' });
+        skipped = 0; truncated = true; break;
+      }
     }
+    if (skipped && !truncated && out.length <= 260) out.push({ t: '·', s: '… ' + skipped + '줄 그대로 …' });
     return { rows: out, added: added, removed: removed };
   }
 
