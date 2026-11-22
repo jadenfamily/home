@@ -854,6 +854,31 @@
   function encPath(path) { return String(path || '').split('/').map(encodeURIComponent).join('/'); }
   function shaKey(repo, path) { return repo + '::' + path; }
 
+  /* 1MB가 넘는 파일은 contents 응답이 content 없이 sha만 와서 본문을 Git Blob에서 받아요.
+     같은 sha를 한 화면에서 두 번 받지 않도록 받은 본문은 잠깐 들고 있어요(내용이 같으면 sha도 같아요). */
+  var BLOB_CACHE = {};
+  var BLOB_CACHE_MAX = 4;
+  async function ghGetBlobText(repo, sha, token) {
+    var ck = String(repo) + '::' + String(sha);
+    if (Object.prototype.hasOwnProperty.call(BLOB_CACHE, ck)) return { ok: true, raw: BLOB_CACHE[ck] };
+    try {
+      var res = await window.fetch(repoBase(repo) + '/git/blobs/' + encodeURIComponent(sha),
+        { headers: ghHeaders(token), cache: 'no-store' });
+      if (res.status === 401) return { ok: false, status: 401, error: '토큰이 올바르지 않아요' };
+      if (res.status === 403) return { ok: false, status: 403, error: '권한이 없어요' };
+      if (!res.ok) return { ok: false, status: res.status, error: 'HTTP ' + res.status };
+      var blob = await res.json();
+      var raw = blob && blob.content ? b64decodeUtf8(blob.content) : '';
+      if (!raw) return { ok: false, status: res.status, error: '큰 파일의 내용을 받지 못했어요' };
+      BLOB_CACHE[ck] = raw;
+      var ks = Object.keys(BLOB_CACHE);
+      while (ks.length > BLOB_CACHE_MAX) delete BLOB_CACHE[ks.shift()];
+      return { ok: true, raw: raw };
+    } catch (e) {
+      return { ok: false, status: 0, error: '네트워크에 연결하지 못했어요' };
+    }
+  }
+
   async function ghGetAt(repo, path, token) {
     var url = repoBase(repo) + '/contents/' + encPath(path) + '?ref=' + encodeURIComponent((S.conn && S.conn.branch) || 'main') + '&_=' + Date.now();
     try {
@@ -866,6 +891,11 @@
       if (Object.prototype.toString.call(j) === '[object Array]') return { ok: true, list: j };
       var text = j && j.content ? b64decodeUtf8(j.content) : '';
       if (j && j.sha) S.sha[shaKey(repo, path)] = j.sha;
+      if (j && j.sha && !text && (j.encoding === 'none' || Number(j.size) > 0)) {
+        var big = await ghGetBlobText(repo, j.sha, token);
+        if (!big.ok) return { ok: false, status: big.status, error: big.error };
+        text = big.raw;
+      }
       return { ok: true, raw: text, sha: j && j.sha };
     } catch (e) {
       return { ok: false, status: 0, error: '네트워크에 연결하지 못했어요' };
