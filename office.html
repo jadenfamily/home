@@ -3887,7 +3887,7 @@ var QR = (function () {
     for (var i = list.length - 1; i >= 0; i--) {
       var w = list[i];
       if (w.status === 'working' || w.status === 'queued' || w.status === 'waiting') return true;
-      if (w.kind === 'delegation' && w.status === 'approved') return true;
+      if (w.kind === 'delegation' && w.status === 'approved' && (w.phase === 'run' || w.phase === 'collect')) return true;
       var t = Date.parse(w.updatedAt || w.at || '');
       if ((w.status === 'done' || w.status === 'approved' || w.status === 'failed' || w.status === 'rejected') && t && (Date.now() - t) < 30 * 60000) return true;
     }
@@ -5644,12 +5644,15 @@ var QR = (function () {
   /* ==================================================================
      팀 작업 현황 모달 — 지금 하는 일 · 진행 로그 · 최근 보고
      ================================================================== */
+  function stillRunning(w) {
+    return !!w && w.kind === 'delegation' && w.status === 'approved' && (w.phase === 'run' || w.phase === 'collect');
+  }
   function activeWorkFor(teamId) {
     var out = [], list = workFor(teamId);
     for (var i = list.length - 1; i >= 0; i--) {
       var w = list[i];
       if (w.status === 'working' || w.status === 'queued' || w.status === 'waiting') out.push(w);
-      else if (w.kind === 'delegation' && w.status === 'approved') out.push(w);
+      else if (stillRunning(w)) out.push(w);
     }
     return out;
   }
@@ -5658,7 +5661,7 @@ var QR = (function () {
     for (var i = 0; i < list.length; i++) {
       var w = list[i];
       if (w.status === 'working' || w.status === 'queued') return w;
-      if (w.kind === 'delegation' && w.status === 'approved') return w;
+      if (stillRunning(w)) return w;
     }
     return null;
   }
