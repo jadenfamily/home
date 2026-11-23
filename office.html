@@ -4638,7 +4638,7 @@ var QR = (function () {
     var team = secretaryTeam();
     var id = teamModelId(team), sp = splitModelId(id);
     if (!hasKey(sp.pid)) { toast('⚙️ 설정에서 ' + (PROVIDERS[sp.pid] ? PROVIDERS[sp.pid].label : 'AI') + ' 키를 먼저 넣어 주세요.'); return null; }
-    var title = String(d.title || '').trim() || firstLines(text, 1).slice(0, 40) || '새 일';
+    var title = String(d.title || '').trim() || clip(firstLines(text, 1), 36) || '새 일';
     var w = newWork('sec', title, text, d.material ? [d.material] : []);
     w.kind = 'delegation';
     w.phase = 'plan';
@@ -4936,7 +4936,7 @@ var QR = (function () {
     if (!text) { toast('지시 내용을 적어 주세요.'); return null; }
     var id = teamModelId(team), sp = splitModelId(id);
     if (!hasKey(sp.pid)) { toast('⚙️ 설정에서 ' + (PROVIDERS[sp.pid] ? PROVIDERS[sp.pid].label : 'AI') + ' 키를 먼저 넣어 주세요.'); return null; }
-    var title = String(d.title || '').trim() || firstLines(text, 1).slice(0, 40) || '새 일';
+    var title = String(d.title || '').trim() || clip(firstLines(text, 1), 36) || '새 일';
     var w = newWork(d.teamId, title, text, d.material ? [d.material] : []);
     pushLog(w, '대표님 지시');
     if (d.sources) pushLog(w, '접수함 확인 중');
