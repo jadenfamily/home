@@ -4007,14 +4007,29 @@ var QR = (function () {
     TOOLS = tools;
     try {
       var res = await callWithKeys(pid, model, { system: system, messages: messages }, { maxTokens: (opts && opts.maxTokens) || 2600 });
+      /* 단종·없어진 모델이면 목록에서 숨기고 바로 쓸 수 있는 모델로 한 번 더 */
+      if (res && !res.ok && isDeadModelError(res.status, res.error)) {
+        markDeadModel(id, res.error);
+        var deadAlt = nextUsableModel(id);
+        if (deadAlt) {
+          var dsp = splitModelId(deadAlt);
+          tried[deadAlt] = 1;
+          pid = dsp.pid; model = dsp.model; id = deadAlt;
+          toast('이 모델은 더 이상 쓸 수 없어 ' + modelShort(deadAlt) + '(으)로 이어서 해요.');
+          res = await callWithKeys(pid, model, { system: system, messages: messages }, { maxTokens: (opts && opts.maxTokens) || 2600 });
+        }
+      }
       while (res && !res.ok && (res.status === 429 || res.status === 503)) {
         var alt = busyFallbackModel(id, tried);
         if (!alt || switched >= 4) break;
         var bsp = splitModelId(alt);
         tried[alt] = 1;
         switched++;
+        var fromShort = modelShort(id);
         pid = bsp.pid;
         model = bsp.model;
+        id = alt;
+        toast(fromShort + ' 한도/혼잡 → ' + modelShort(alt) + '(으)로 이어서 보내요.');
         res = await callWithKeys(pid, model, { system: system, messages: messages }, { maxTokens: (opts && opts.maxTokens) || 2600 });
       }
       return res;
