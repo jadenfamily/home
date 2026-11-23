@@ -3872,6 +3872,13 @@ var QR = (function () {
     if (d < 86400000) return Math.floor(d / 3600000) + '시간 전';
     return Math.floor(d / 86400000) + '일 전';
   }
+  /* 화면에 보여 줄 때는 저장소·파일 경로 대신 가족이 아는 이름으로 적어요 */
+  var REPO_LABEL = { 'home': '우리 집 화면', 'kids-dashboard': '아이 화면', 'fridge-dashboard': '냉파 화면', 'ledger-dashboard': '가계부 화면' };
+  var FILE_LABEL = { 'index.html': '기본 화면', 'office.html': 'AI 사무실 화면', 'chat.html': '옛 챗 화면' };
+  function fileLabel(repo, path) {
+    var base = String(path || '').split('/').pop();
+    return (REPO_LABEL[String(repo || '')] || '화면') + ' · ' + (FILE_LABEL[base] || base || '코드');
+  }
   function firstLines(text, n) {
     var lines = String(text || '').replace(/\r/g, '').split('\n'), out = [];
     for (var i = 0; i < lines.length && out.length < n; i++) {
@@ -4274,7 +4281,7 @@ var QR = (function () {
             var prop = S.proposals[out.card.id];
             if (prop) {
               item.code = codeFromProposal(prop, args);
-              pushLog(item, '수정안 준비 · ' + prop.repo + '/' + prop.path + ' (+' + prop.diff.added + ' −' + prop.diff.removed + ')');
+              pushLog(item, '수정안 준비 · ' + fileLabel(prop.repo, prop.path) + ' (+' + prop.diff.added + ' −' + prop.diff.removed + ')');
             }
           }
         }
@@ -4590,7 +4597,7 @@ var QR = (function () {
         var parent = workById(item.reviewOf);
         if (parent) { parent.commit = item.commit; parent.nextDone = true; parent.nextAt = nowIso(); pushLog(parent, 'QC 승인 뒤 코드 반영 완료'); }
       }
-      pushLog(item, '코드 반영 완료 · ' + c.repo + '/' + c.path);
+      pushLog(item, '코드 반영 완료 · ' + fileLabel(c.repo, c.path));
       toast('코드에 반영했어요. 화면은 잠시 뒤 새로 고쳐 주세요.');
     } catch (e) {
       item.commit = { ok: false, at: nowIso(), error: String(e && e.message ? e.message : e) };
@@ -4891,7 +4898,7 @@ var QR = (function () {
     if (sec.recommend) h += '<div class="ap-rec">추천: ' + esc(sec.recommend) + '</div>';
     if (item.code) {
       var c = item.code;
-      h += '<div class="codemeta"><span>' + esc(c.repo + '/' + c.path) + '</span><span class="' + (c.checkOk ? 'ok' : 'bad') + '">' + (c.checkOk ? '자동 검사 통과' : '자동 검사 문제') + '</span>' +
+      h += '<div class="codemeta"><span>' + esc(fileLabel(c.repo, c.path)) + '</span><span class="' + (c.checkOk ? 'ok' : 'bad') + '">' + (c.checkOk ? '자동 검사 통과' : '자동 검사 문제') + '</span>' +
         '<span>+' + c.added + ' −' + c.removed + '</span><span>아직 반영 전</span></div>';
     }
     if (rep.detail) {
@@ -4921,7 +4928,7 @@ var QR = (function () {
     } else if (item.status === 'approved') {
       if (!item.nextDone) h += '<div class="ap-actions">' + nextButtons(item) + '</div>';
       else if (item.commit) {
-        h += '<div class="ap-rec">' + (item.commit.ok ? '✅ 코드에 반영했어요 · ' + esc(item.commit.repo + '/' + item.commit.path) : '⚠️ 반영하지 못했어요 · ' + esc(clip(item.commit.error || '', 80))) + '</div>';
+        h += '<div class="ap-rec">' + (item.commit.ok ? '✅ 코드에 반영했어요 · ' + esc(fileLabel(item.commit.repo, item.commit.path)) : '⚠️ 반영하지 못했어요 · ' + esc(clip(item.commit.error || '', 80))) + '</div>';
       } else {
         h += '<div class="ap-rec">승인 완료 · 마무리했어요</div>';
       }
