@@ -4231,8 +4231,15 @@ var QR = (function () {
     if (!S.office || !src) return null;
     var open = noticeFor(src.id);
     var log = (src.progressLog && src.progressLog.length) ? src.progressLog : (src.log || []);
-    var lastLine = log.length ? String(log[log.length - 1].text || '') : '';
-    var lastAt = log.length ? log[log.length - 1].at : '';
+    var lastLine = '', lastAt = '';
+    for (var li = log.length - 1; li >= 0; li--) {
+      var t0 = String(log[li].text || '');
+      /* 방금 붙인 중단 기록 말고, 그 직전에 어디까지 갔는지를 보여 줘요 */
+      if (/^(자동 중단|대표님 · )/.test(t0)) continue;
+      lastLine = t0;
+      lastAt = log[li].at || '';
+      break;
+    }
     var points = [
       '마지막 기록 · ' + (lastLine ? (lastLine + (lastAt ? ' (' + whenLabel(lastAt) + ')' : '')) : '기록 없음'),
       auto ? '3분 넘게 새 소식이 없어 비서가 자동으로 멈추고 정리했어요.' : '대표님이 직접 멈추셨어요.'
