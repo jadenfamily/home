@@ -530,7 +530,7 @@
     { id: 'kids', emoji: '🌟', title: "Jaden's Today", desc: '하루 루틴 · 칭찬 스티커 · 학원 시간표', kind: 'link', cls: 'kids', url: '../kids-dashboard/' },
     { id: 'fridge', emoji: '🧊', title: '냉장고 파먹기', desc: '식재료 재고 · 장보기 알림 · 주간 식단', kind: 'link', cls: 'fridge', url: '../fridge-dashboard/' },
     { id: 'ledger', emoji: '📒', title: '가계부', desc: '수입·고정비·변동지출과 예산을 한곳에', kind: 'link', cls: 'ledger', url: '../ledger-dashboard/' },
-    { id: 'chat', emoji: '🤖', title: 'AI 비서 챗', desc: '대시보드 코드 수정 · 가족 데이터 확인 · 여러 대화방', kind: 'link', cls: 'chat', url: 'chat.html', adminOnly: true }
+    { id: 'office', emoji: '🏢', title: 'AI 사무실', desc: 'CS·기획·디자인·개발·QC·리서치 팀에게 맡기고 대표님 결재로 마무리', kind: 'link', cls: 'chat', url: 'office.html', adminOnly: true }
   ];
 
   /* 계정별로 갈 수 있는 대시보드 (관리자는 언제나 전부) */
@@ -821,7 +821,7 @@
     var html = '';
     for (var i = 0; i < DASHBOARDS.length; i++) {
       var d = DASHBOARDS[i];
-      /* 이 계정이 갈 수 있는 곳만 보여 줘요. AI 비서 챗은 관리자에게만 보여요 */
+      /* 이 계정이 갈 수 있는 곳만 보여 줘요. AI 사무실은 관리자에게만 보여요 */
       if (d.adminOnly ? !isAdmin() : allowed.indexOf(d.id) < 0) continue;
       var badge = (d.kind !== 'soon' && last === d.id) ? '<span class="ht-badge">최근 사용</span>' : '';
       var body = '<span class="ht-emoji" aria-hidden="true">' + d.emoji + '</span>' +
