@@ -618,7 +618,9 @@
     teamModal: null, directHint: '',
     pipe: [], pipeRunning: false, planQueue: [], planRunning: false,
     saveTimer: null, saveChain: Promise.resolve(), saveState: 'idle',
-    lastActivityAt: 0, settingsMsg: ''
+    lastActivityAt: 0, settingsMsg: '',
+    bg: { pollTimer: null, lastSha: '', kick: {}, at: 0, result: '', note: '',
+      watch: {}, stopping: {}, notified: {}, watchAt: 0, liveAt: 0 }
   };
 
   /* ===== 저장소 이름·경로 다듬기 (chat.html에서 승계) ===== */
@@ -3923,7 +3925,10 @@ var QR = (function () {
   function failedList() {
     var out = [], list = (S.office && S.office.work) || [];
     for (var i = list.length - 1; i >= 0 && out.length < 3; i--) {
-      if (list[i].status === 'failed') out.push(list[i]);
+      if (list[i].status !== 'failed') continue;
+      /* 비서가 이미 보고 카드를 올린 일은 결재함에서 두 번 보여 주지 않아요 */
+      if (typeof noticeFor === 'function' && noticeFor(list[i].id)) continue;
+      out.push(list[i]);
     }
     return out;
   }
@@ -4037,6 +4042,319 @@ var QR = (function () {
       } catch (e) { S.saveState = 'error'; return false; }
     });
     return S.saveChain;
+  }
+
+  /* ==================================================================
+     백그라운드 일꾼 — 창을 닫거나 화면을 꺼도 일이 끝까지 돌게 해요
+     (비공개 보관함의 GitHub Actions 워크플로우를 불러요)
+     ================================================================== */
+  var BG_POLL_MS = 3000;
+  var BG_STALE_MS = 180000;
+  var BG_WATCH_MS = 5000;
+
+  function bgBase() {
+    return API_BASE + '/repos/' + encodeURIComponent(DEFAULT_OWNER) + '/' + encodeURIComponent(DEFAULT_REPO);
+  }
+  async function bgPost(url, body) {
+    try {
+      var res = await window.fetch(url, {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, ghHeaders(null)),
+        body: JSON.stringify(body)
+      });
+      if (res.status === 204 || res.status === 200 || res.status === 201) return { ok: true, status: res.status };
+      var txt = '';
+      try { txt = await res.text(); } catch (e) { txt = ''; }
+      var why = 'HTTP ' + res.status;
+      try { var j = JSON.parse(txt); if (j && j.message) why = String(j.message); } catch (e2) { /* 무시 */ }
+      return { ok: false, status: res.status, error: why };
+    } catch (e3) {
+      return { ok: false, status: 0, error: String((e3 && e3.message) || '연결하지 못했어요') };
+    }
+  }
+  /* 두 길로 불러요 — 화면 열쇠에 Actions 권한이 없어도 보관함 쓰기 권한만 있으면 두 번째 길이 통해요 */
+  async function dispatchWorker(workId) {
+    var branch = (S.conn && S.conn.branch) || 'main';
+    var a = await bgPost(bgBase() + '/actions/workflows/ai-office-worker.yml/dispatches',
+      { ref: branch, inputs: { job_id: String(workId) } });
+    if (a.ok) return { ok: true, via: 'workflow_dispatch' };
+    var b = await bgPost(bgBase() + '/dispatches', { event_type: 'ai-office-job', client_payload: { job_id: String(workId) } });
+    if (b.ok) return { ok: true, via: 'repository_dispatch' };
+    return { ok: false, status: b.status || a.status, error: (b.error || a.error || '알 수 없는 오류') };
+  }
+  function isLiveWork(w) {
+    if (!w) return false;
+    if (w.status === 'working' || w.status === 'queued') return true;
+    if (w.kind === 'delegation' && w.status === 'approved' && (w.phase === 'run' || w.phase === 'collect')) return true;
+    return false;
+  }
+  function hasLiveWork() {
+    var list = (S.office && S.office.work) || [];
+    for (var i = 0; i < list.length; i++) if (isLiveWork(list[i])) return true;
+    return false;
+  }
+  function lastLogAt(w) {
+    var log = (w && (w.progressLog && w.progressLog.length ? w.progressLog : w.log)) || [];
+    if (!log.length) return Date.parse((w && (w.startedAt || w.at)) || '') || 0;
+    return Date.parse(log[log.length - 1].at || '') || 0;
+  }
+  function jobStalled(w) {
+    if (!isLiveWork(w)) return false;
+    var t = lastLogAt(w);
+    return !!t && (Date.now() - t) > BG_STALE_MS;
+  }
+  /* 이 화면에서 실행하던 길 — 백그라운드 일꾼을 부르지 못했을 때 안전하게 돌아가요 */
+  function runLocally(item, mode) {
+    if (!item) return;
+    if (mode === 'run') { enqueuePipeline(item.id); return; }
+    if (mode === 'plan') {
+      var note = String(item.planNote || '');
+      item.planNote = '';
+      enqueuePlan(item.id, note);
+      return;
+    }
+    enqueueRun(item.id);
+  }
+  /* 일을 시작해요 — 백그라운드 일꾼에게 맡기고, 안 되면 이 화면에서 실행해요 */
+  async function kick(item, mode) {
+    if (!item || !S.office) return false;
+    if (S.bg.kick[item.id]) return false;
+    S.bg.kick[item.id] = true;
+    if (mode === 'run') { item.status = 'approved'; item.phase = 'run'; }
+    else if (mode === 'plan') { item.status = 'working'; item.phase = 'plan'; }
+    else if (item.status !== 'queued') item.status = 'working';
+    item.cancelRequested = false;
+    item.bg = { at: nowIso(), via: 'trying' };
+    pushLog(item, '백그라운드 일꾼 호출 중');
+    renderAll();
+    try {
+      try { await saveOffice(); } catch (e0) { /* 저장이 늦어도 일꾼은 불러 봐요 */ }
+      var r = await dispatchWorker(item.id);
+      delete S.bg.kick[item.id];
+      if (r.ok) {
+        item.bg = { at: nowIso(), via: r.via };
+        pushLog(item, '백그라운드에서 실행 중 · 화면을 닫아도 계속돼요');
+        S.bg.note = '';
+        renderAll(); saveOfficeSoon(0);
+        S.bg.liveAt = Date.now();
+        startPolling();
+        return true;
+      }
+      item.bg = { at: nowIso(), via: '', error: String(r.error || '') };
+      pushLog(item, '백그라운드 연결 실패 · 이 화면에서 실행해요');
+      toast('백그라운드 일꾼을 부르지 못해 이 화면에서 실행해요. ' + clip(r.error || '', 60));
+    } catch (e) {
+      delete S.bg.kick[item.id];
+      item.bg = { at: nowIso(), via: '', error: String((e && e.message) || e) };
+      pushLog(item, '백그라운드 준비 실패 · 이 화면에서 실행해요');
+    }
+    renderAll(); saveOfficeSoon(0);
+    runLocally(item, mode);
+    return false;
+  }
+
+  /* 다시 열었을 때: 백그라운드에서 실패한 일이 보고 없이 남아 있으면 비서가 정리해 올려요 */
+  function noticeSweep() {
+    if (!S.office) return;
+    var list = S.office.work || [];
+    var changed = false;
+    for (var i = 0; i < list.length; i++) {
+      var w = list[i];
+      if (!w || w.kind === 'notice' || w.status !== 'failed') continue;
+      if (noticeFor(w.id)) continue;
+      var t = Date.parse(w.updatedAt || w.at || '') || 0;
+      if (!t || Date.now() - t > 6 * 3600 * 1000) continue;
+      if (!w.bg && !w.stoppedAt) continue;
+      makeNotice(w, w.error || '작업을 마치지 못했어요.', true);
+      S.bg.notified[w.id] = 1;
+      changed = true;
+    }
+    if (changed) { renderAll(); saveOfficeSoon(0); }
+  }
+
+  /* 진행 상황 받아오기 — 보고·진행 로그가 화면에 바로 보이게 */
+  function startPolling() {
+    if (S.bg.pollTimer) return;
+    S.bg.pollTimer = window.setInterval(pollOffice, BG_POLL_MS);
+  }
+  function stopPolling() {
+    if (!S.bg.pollTimer) return;
+    window.clearInterval(S.bg.pollTimer);
+    S.bg.pollTimer = null;
+  }
+  async function pollOffice() {
+    if (!S.unlocked || !S.office || S.officeLocked || !S.chatKey || !S.me) { stopPolling(); return; }
+    var live = hasLiveWork();
+    if (live) S.bg.liveAt = Date.now();
+    /* 일이 끝난 뒤에도 3분은 더 지켜봐요 (다른 기기·일꾼의 마무리 기록을 받아오려고) */
+    if (!live && Date.now() - (S.bg.liveAt || 0) > 180000) { stopPolling(); renderAll(); return; }
+    /* 아직 올리지 않은 내 변경이 있으면 이번 차례는 건너뛰어요 (덮어쓰지 않게) */
+    if (S.saveState === 'saving') return;
+    if (JSON.stringify(S.office) !== S.officeState) return;
+    var r = await ghGetAt(DEFAULT_REPO, P_OFFICE, null);
+    if (!r.ok || r.missing) return;
+    if (r.sha && r.sha === S.bg.lastSha) return;
+    var env = null;
+    try { env = JSON.parse(r.raw); } catch (e) { env = null; }
+    if (!env || !env.ct) return;
+    var obj = null;
+    try { obj = await familyDecrypt(env); } catch (e2) { obj = null; }
+    if (!obj) return;
+    S.bg.lastSha = r.sha || '';
+    S.office = normalizeOffice(obj);
+    S.officeState = JSON.stringify(S.office);
+    S.bg.at = Date.now();
+    renderAll();
+  }
+
+  /* [작업 중단] · [다시 실행] — 멈춘 일은 비서가 대표실 결재함에 보고해요 */
+  function noticeFor(srcId) {
+    var list = (S.office && S.office.work) || [];
+    for (var i = list.length - 1; i >= 0; i--) {
+      var n = list[i];
+      if (n && n.kind === 'notice' && n.noticeOf === srcId && (n.status === 'waiting' || n.status === 'working')) return n;
+    }
+    return null;
+  }
+  function closeNotice(id, silent) {
+    var n = workById(id);
+    if (!n) return;
+    n.status = 'approved';
+    n.nextDone = true;
+    n.nextAt = nowIso();
+    pushLog(n, '확인하고 닫음');
+    renderAll(); saveOfficeSoon(0);
+    if (!silent) toast('비서 보고를 확인하고 닫았어요.');
+  }
+  /* 1F 비서실 → 대표님 결재함: 왜 멈췄는지 짧게 정리해 올려요 */
+  function makeNotice(src, reason, auto) {
+    if (!S.office || !src) return null;
+    var open = noticeFor(src.id);
+    var log = (src.progressLog && src.progressLog.length) ? src.progressLog : (src.log || []);
+    var lastLine = log.length ? String(log[log.length - 1].text || '') : '';
+    var lastAt = log.length ? log[log.length - 1].at : '';
+    var points = [
+      '마지막 기록 · ' + (lastLine ? (lastLine + (lastAt ? ' (' + whenLabel(lastAt) + ')' : '')) : '기록 없음'),
+      auto ? '3분 넘게 새 소식이 없어 비서가 자동으로 멈추고 정리했어요.' : '대표님이 직접 멈추셨어요.'
+    ];
+    if (open) {
+      open.secretary = open.secretary || {};
+      open.secretary.summary = reason;
+      open.secretary.points = points;
+      open.updatedAt = nowIso();
+      renderAll(); saveOfficeSoon(0);
+      return open;
+    }
+    var who = src.teamId === 'sec' ? '비서' : ((teamById(src.teamId) || {}).name || '팀');
+    var title = (auto ? '⚠ ' : '⏹ ') + who + ' 작업이 멈췄어요 · ' + clip(src.title || '', 34);
+    var w = newWork('sec', title, '', [], src.id);
+    w.kind = 'notice';
+    w.noticeOf = src.id;
+    w.status = 'waiting';
+    w.auto = !!auto;
+    w.report = {
+      summary: reason,
+      detail: '원래 일: ' + (src.title || '') + '\n원인: ' + reason + '\n마지막 기록: ' + (lastLine || '기록 없음'),
+      next: [], at: nowIso()
+    };
+    w.secretary = { summary: reason, points: points, recommend: '다시 실행하면 멈춘 자리부터 이어서 해요.', next: [], at: nowIso() };
+    pushLog(w, auto ? '자동 중단 보고' : '작업 중단 보고');
+    return w;
+  }
+  /* 중단 처리를 한 곳에 모아요 (수동·자동 모두) */
+  function stopWorkCore(w, reason, auto) {
+    if (!w) return null;
+    w.cancelRequested = true;
+    w.status = 'failed';
+    w.error = reason;
+    w.bg = null;
+    w.stoppedAt = nowIso();
+    pushLog(w, (auto ? '자동 중단 · ' : '대표님 · ') + reason);
+    var kids = w.childIds || [];
+    for (var i = 0; i < kids.length; i++) {
+      var c = workById(kids[i]);
+      if (!c) continue;
+      if (c.status === 'working' || c.status === 'queued') {
+        c.cancelRequested = true;
+        c.status = 'failed';
+        c.error = reason;
+        pushLog(c, (auto ? '자동 중단 · ' : '대표님 · ') + reason);
+      }
+    }
+    delete S.bg.watch[w.id];
+    var n = makeNotice(w, reason, auto);
+    if (n) S.bg.notified[w.id] = 1;
+    renderAll(); saveOfficeSoon(0);
+    return n;
+  }
+  function stopWork(id) {
+    var w = workById(id);
+    if (!w) return;
+    if (!isLiveWork(w)) { toast('지금은 멈출 작업이 없어요.'); return; }
+    stopWorkCore(w, '대표님이 작업을 중단했어요.', false);
+    toast('작업을 멈추고 비서가 정리해 결재함에 올렸어요.');
+  }
+  /* 화면이 열려 있는 동안 지켜보기 — 3분 넘게 소식이 없으면 자동으로 멈췄다가 보고해요 */
+  function watchWork() {
+    if (!S.unlocked || !S.office || S.officeLocked) return;
+    var list = S.office.work || [];
+    for (var i = 0; i < list.length; i++) {
+      var w = list[i];
+      if (!w || w.kind === 'notice') continue;
+      if (isLiveWork(w)) {
+        S.bg.watch[w.id] = 1;
+        if (jobStalled(w) && !S.bg.stopping[w.id]) {
+          S.bg.stopping[w.id] = 1;
+          stopWorkCore(w, '응답이 3분 넘게 없어 자동으로 멈췄어요.', true);
+          delete S.bg.stopping[w.id];
+          toast('응답이 없어 작업을 자동으로 멈추고, 비서가 보고를 올렸어요.');
+        }
+      } else if (S.bg.watch[w.id]) {
+        delete S.bg.watch[w.id];
+        if (w.status === 'failed' && !S.bg.notified[w.id]) {
+          S.bg.notified[w.id] = 1;
+          makeNotice(w, w.error || '작업을 마치지 못했어요.', true);
+          renderAll(); saveOfficeSoon(0);
+        }
+      }
+    }
+  }
+  function rerunWork(id) {
+    var w = workById(id);
+    if (!w) return;
+    var open = noticeFor(w.id);
+    if (open) closeNotice(open.id, true);
+    w.cancelRequested = false;
+    w.error = '';
+    delete S.bg.notified[w.id];
+    if (w.kind === 'delegation') {
+      var phase = w.phase || 'plan';
+      if (phase === 'plan') {
+        w.status = 'working';
+        w.phase = 'plan';
+        pushLog(w, '다시 실행 · 배분 계획부터');
+        renderAll(); saveOfficeSoon(0);
+        kick(w, 'plan');
+      } else {
+        var kids = w.childIds || [];
+        for (var i = 0; i < kids.length; i++) {
+          var c = workById(kids[i]);
+          if (!c) continue;
+          c.cancelRequested = false;
+          if (c.status === 'failed' || c.status === 'working') { c.status = 'queued'; c.error = ''; }
+        }
+        w.status = 'approved';
+        w.phase = 'run';
+        pushLog(w, '다시 실행 · 남은 팀부터 이어서');
+        renderAll(); saveOfficeSoon(0);
+        kick(w, 'run');
+      }
+      return;
+    }
+    w.status = 'working';
+    pushLog(w, '다시 실행');
+    renderAll(); saveOfficeSoon(0);
+    kick(w, 'item');
   }
 
   /* ---------- CS 접수함 (2단계: 4개 대시보드 챗봇 버튼이 여기에 쌓아요) ---------- */
@@ -4653,8 +4971,8 @@ var QR = (function () {
     var mt = document.getElementById('directMaterial'); if (mt) mt.value = '';
     if (!opts || !opts.keepTab) S.tab = 'office';
     renderAll(); saveOfficeSoon(0);
-    enqueuePlan(w.id, '');
     toast('비서에게 지시했어요. 어떤 팀에 어떤 순서로 맡길지 배분 계획을 세워 결재함에 올려요.');
+    kick(w, 'plan');
     return w;
   }
   function enqueuePlan(workId, note) {
@@ -4736,8 +5054,8 @@ var QR = (function () {
       sec.childIds.push(w.id);
     }
     renderAll(); saveOfficeSoon(0);
-    enqueuePipeline(sec.id);
     toast('배분 계획을 승인했어요. 비서가 팀에 순서대로 전달하고, 끝나면 하나로 취합해 올려요.');
+    kick(sec, 'run');
   }
   function enqueuePipeline(secId) {
     S.pipe = S.pipe || [];
@@ -4948,8 +5266,8 @@ var QR = (function () {
     var mt = document.getElementById('directMaterial'); if (mt) mt.value = '';
     if (!opts || !opts.keepTab) S.tab = 'office';
     renderAll(); saveOfficeSoon(0);
-    enqueueRun(w.id);
     toast(team.name + '에 지시를 보냈어요. 끝나면 비서가 정리해 올려요.');
+    kick(w, 'item');
     return w;
   }
   function approveWork(id) {
@@ -5001,8 +5319,9 @@ var QR = (function () {
       S.rejectOpen[id] = false;
       pushLog(item, '대표님 반려 · ' + clip(reason, 100));
       pushLog(item, '반려 사유를 반영해 배분 계획 다시 세우는 중');
+      item.planNote = clip(reason, 600);
       renderAll(); saveOfficeSoon(0);
-      enqueuePlan(id, reason);
+      kick(item, 'plan');
       toast('반려했어요. 비서가 사유를 반영해 배분 계획을 다시 세워요.');
       return;
     }
@@ -5028,7 +5347,7 @@ var QR = (function () {
     var re = newWork(target, item.title + ' (재작업)', item.brief + briefExtra + '\n\n[대표님 반려 사유 — 이 점을 고쳐 다시 해 주세요]\n' + reason, item.materialIds, item.id);
     pushLog(re, '반려 재작업 시작');
     renderAll(); saveOfficeSoon(0);
-    enqueueRun(re.id);
+    kick(re, 'item');
     toast('반려했어요. ' + ((teamById(target) || {}).name || '팀') + '에 다시 일을 맡겼어요.');
   }
   function handoff(item, teamId, label) {
@@ -5047,7 +5366,7 @@ var QR = (function () {
     var w = newWork(teamId, to.name + ' · ' + item.title, brief, [item.id], item.id);
     pushLog(w, from.name + ' 보고를 넘겨받음');
     renderAll(); saveOfficeSoon(0);
-    enqueueRun(w.id);
+    kick(w, 'item');
     toast(to.name + '(으)로 넘겼어요. 끝나면 비서가 다시 정리해 올려요.');
   }
   function qcHandoff(item) {
@@ -5067,7 +5386,7 @@ var QR = (function () {
     w.reviewOf = item.id;  /* 원래 개발팀 일 */
     pushLog(w, '개발팀 수정안 검수 요청');
     renderAll(); saveOfficeSoon(0);
-    enqueueRun(w.id);
+    kick(w, 'item');
     toast('QC팀에 검수를 맡겼어요.');
   }
   async function commitCode(item) {
@@ -5234,6 +5553,16 @@ var QR = (function () {
       '</button>';
   }
   function apMini(w) {
+    if (w.kind === 'notice') {
+      return '<div class="ap-mini notice">' +
+        '<span class="am-ic">⚠️</span>' +
+        '<span class="am-body"><b class="am-title">' + esc(w.title) + '</b>' +
+        '<span class="am-sub">' + esc(clip((w.secretary && w.secretary.summary) || '', 60)) + ' · ' + esc(whenLabel(w.updatedAt)) + '</span></span>' +
+        '<span class="am-act">' +
+        '<button class="btn-s ok" type="button" data-act="rerun-work" data-id="' + esc(w.noticeOf || '') + '">다시 실행</button>' +
+        '<button class="btn-s" type="button" data-act="close-notice" data-id="' + esc(w.id) + '">닫기</button>' +
+        '</span></div>';
+    }
     var team = teamById(w.teamId) || secretaryTeam();
     var sub = w.kind === 'delegation'
       ? ('비서 ' + (w.phase === 'report' ? '최종 취합 보고' : '배분 계획') + ' · ' + ((w.delegationPlan || []).length) + '개 팀 · ' + whenLabel(w.updatedAt))
@@ -5397,6 +5726,7 @@ var QR = (function () {
     return h;
   }
   function apCard(item) {
+    if (item.kind === 'notice') return apNoticeCard(item);
     if (item.kind === 'delegation') return apDelegationCard(item);
     var team = teamById(item.teamId) || { name: item.teamId, emoji: '📄' };
     var sec = item.secretary || {};
@@ -5579,6 +5909,32 @@ var QR = (function () {
     h += '</div>';
     return h;
   }
+  /* 비서가 올린 '문제 보고' 카드 — 원인 + [다시 실행] / [닫기(확인)] */
+  function apNoticeCard(item) {
+    var sec = item.secretary || {};
+    var src = workById(item.noticeOf) || null;
+    var who = src ? ((src.teamId === 'sec' ? '비서' : ((teamById(src.teamId) || {}).name || '팀'))) : '팀';
+    var h = '<div class="ap-card notice" data-work="' + esc(item.id) + '">';
+    h += '<div class="ap-h"><span>⚠ 비서 보고</span><span class="who">· 1F 비서실</span><span class="when">' + esc(whenLabel(item.updatedAt)) + '</span></div>';
+    h += '<div class="ap-t">' + esc(item.title) + '</div>';
+    h += '<div class="ap-sum">' + esc(sec.summary || '작업이 멈춰 비서가 정리했어요.') + '</div>';
+    if (sec.points && sec.points.length) {
+      h += '<ul class="ap-points">';
+      for (var i = 0; i < sec.points.length; i++) h += '<li>' + esc(sec.points[i]) + '</li>';
+      h += '</ul>';
+    }
+    if (src) h += '<p class="tm-note">원래 일 · ' + esc(clip(src.title || '', 60)) + ' (' + esc(who) + ')</p>';
+    if (item.status === 'waiting') {
+      h += '<div class="ap-actions">';
+      if (src) h += '<button class="btn-s ok" type="button" data-act="rerun-work" data-id="' + esc(src.id) + '">다시 실행</button>';
+      h += '<button class="btn-s" type="button" data-act="close-notice" data-id="' + esc(item.id) + '">닫기(확인)</button>';
+      h += '</div>';
+    } else {
+      h += '<div class="ap-rec">확인하고 닫았어요</div>';
+    }
+    h += '</div>';
+    return h;
+  }
   function diffHtmlPlain(text) {
     var lines = String(text || '').split('\n'), out = [];
     for (var i = 0; i < lines.length && i < 400; i++) {
@@ -5711,9 +6067,36 @@ var QR = (function () {
         '<div class="tm-h" style="margin-top:7px;color:#8d849f">경과 <span class="tm-elapsed" data-elapsed="' + esc(startedAt) + '">' + esc(elapsedLabel(startedAt)) + '</span></div>' +
         (cur.brief ? '<p class="tm-brief">' + esc(clip(cur.brief, 900)) + '</p>' : '') +
         ((cur.kind === 'delegation' && cur.phase === 'run') ? pipelineLine(cur) : '') + '</div>';
-      h += '<div class="tm-sec"><div class="tm-h"><span>실시간 진행 로그</span><span class="when">' + ((cur.progressLog || []).length) + '단계</span></div>' + progressLogHtml(cur) + '</div>';
+      h += '<div class="tm-sec"><div class="tm-h"><span>실시간 진행 로그</span><span class="when">' + ((cur.progressLog || []).length) + '단계</span></div>' + progressLogHtml(cur);
+      if (cur.bg && cur.bg.via) {
+        h += '<p class="tm-note">' + (cur.bg.via === 'trying' ? '백그라운드 일꾼을 부르는 중이에요.' : '백그라운드 일꾼이 일하고 있어요 · 창을 닫아도 계속돼요.') + '</p>';
+      }
+      if (jobStalled(cur)) {
+        h += '<p class="tm-note" style="background:#fff4e5;color:#8a5a00;border:1px solid #f0dcc0">응답이 오래 없어요. 다시 실행하거나 중단할 수 있어요.</p>';
+      }
+      h += '<div class="tm-actions">' +
+        '<button class="btn-s warn" type="button" data-act="stop-work" data-id="' + esc(cur.id) + '">작업 중단</button>' +
+        '<button class="btn-s ok" type="button" data-act="rerun-work" data-id="' + esc(cur.id) + '">다시 실행</button>' +
+        '</div>';
+      h += '</div>';
     } else {
       h += '<div class="tm-sec"><div class="tm-h"><span>지금 진행 중인 일</span></div><p class="tm-empty">지금은 진행 중인 일이 없어요. 이 팀에 새 일을 지시하면 진행 상황이 여기에 실시간으로 쌓여요.</p></div>';
+      /* 멈춰 버린 일이 있으면 여기서 바로 다시 실행하거나 정리할 수 있게 해요 */
+      var stuck = null, allW = workFor(team.id);
+      for (var s0 = allW.length - 1; s0 >= 0; s0--) {
+        var sw = allW[s0];
+        if (sw.status === 'failed' || sw.status === 'stopping') { stuck = sw; break; }
+      }
+      if (stuck) {
+        h += '<div class="tm-sec"><div class="tm-h"><span>멈춰 있는 일</span><span class="when">' + esc(whenLabel(stuck.updatedAt || stuck.at)) + '</span></div>' +
+          '<div class="tm-title">' + esc(stuck.title) + '</div>' +
+          '<p class="tm-note" style="background:#fff1f2;color:#c14160">' + esc(clip(stuck.error || '작업을 마치지 못했어요.', 160)) + '</p>' +
+          progressLogHtml(stuck) +
+          '<div class="tm-actions">' +
+          '<button class="btn-s ok" type="button" data-act="rerun-work" data-id="' + esc(stuck.id) + '">다시 실행</button>' +
+          '<button class="btn-s" type="button" data-act="dismiss-fail" data-id="' + esc(stuck.id) + '">치우기</button>' +
+          '</div></div>';
+      }
     }
     var waiting = [], recent = [];
     var all = workFor(team.id);
@@ -5923,6 +6306,8 @@ var QR = (function () {
       }
     }
     renderAll();
+    if (hasLiveWork()) { S.bg.liveAt = Date.now(); startPolling(); }
+    noticeSweep();
     if (!cachedModels()) refreshModels().then(function () { renderAll(); }).catch(function () { /* 무시 */ });
   }
   function enterChat() { return enterOffice(); }
@@ -5947,6 +6332,13 @@ var QR = (function () {
     S.pipeRunning = false;
     S.planQueue = [];
     S.planRunning = false;
+    stopPolling();
+    S.bg.lastSha = '';
+    S.bg.kick = {};
+    S.bg.watch = {};
+    S.bg.stopping = {};
+    S.bg.notified = {};
+    S.bg.watchAt = 0;
     var tmo = document.getElementById('teamModal');
     if (tmo) tmo.hidden = true;
     document.body.style.overflow = '';
@@ -6493,7 +6885,7 @@ var QR = (function () {
         fw.childIds = [];
         pushLog(fw, '다시 맡김 · 배분 계획부터');
         renderAll(); saveOfficeSoon(0);
-        enqueuePlan(fw.id, '');
+        kick(fw, 'plan');
         toast('비서에게 다시 맡겼어요.');
         return;
       }
@@ -6501,10 +6893,13 @@ var QR = (function () {
       var rw = newWork(fw.teamId, fw.title, fw.brief, fw.materialIds, fw.id);
       pushLog(rw, '다시 맡김');
       renderAll(); saveOfficeSoon(0);
-      enqueueRun(rw.id);
+      kick(rw, 'item');
       toast('다시 맡겼어요.');
       return;
     }
+    if (act === 'stop-work') { stopWork(id); return; }
+    if (act === 'rerun-work') { if (id) rerunWork(id); return; }
+    if (act === 'close-notice') { closeNotice(id); return; }
     if (act === 'dismiss-fail') {
       var dw = workById(id);
       if (dw) { dw.status = 'dismissed'; pushLog(dw, '치움'); }
@@ -6552,6 +6947,11 @@ var QR = (function () {
   /* 입력 중에는 화면을 다시 그리지 않게, 초안은 이벤트로만 모아요 */
   function tick() {
     autoLockIdle();
+    /* 멈춘 일 지켜보기 — 5초에 한 번 (3분 넘게 소식이 없으면 자동 중단 + 비서 보고) */
+    if (S.unlocked && S.office && !S.officeLocked) {
+      var tNow = Date.now();
+      if (!S.bg.watchAt || tNow - S.bg.watchAt > BG_WATCH_MS) { S.bg.watchAt = tNow; watchWork(); }
+    }
     var nodes = document.querySelectorAll('[data-left]');
     for (var i = 0; i < nodes.length; i++) {
       var at = Number(nodes[i].getAttribute('data-left'));
