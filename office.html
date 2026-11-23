@@ -371,6 +371,53 @@
   }
   .toast.show{ opacity:1; transform:translate(-50%,0); }
 
+  /* ---------- 팀 작업 현황 ---------- */
+  .team-modal-card{ max-width:640px; }
+  .tm-top{ display:flex; align-items:center; gap:9px; margin-bottom:10px; flex-wrap:wrap; }
+  .tm-avatar{ position:relative; width:46px; height:46px; flex:0 0 auto; }
+  .tm-avatar svg{ display:block; width:46px; height:51.75px; }
+  .tm-avatar .em{ position:absolute; right:-3px; bottom:1px; width:19px; height:19px; border-radius:50%; background:#fff; display:grid; place-items:center; font-size:11px; box-shadow:0 1px 4px rgba(80,60,40,.16); }
+  .tm-who{ min-width:0; flex:1 1 130px; }
+  .tm-who b{ display:block; font-size:14px; font-weight:900; letter-spacing:-.03em; }
+  .tm-who span{ display:block; font-size:10.5px; font-weight:900; color:#8d849f; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tm-elapsed{ font-size:11px; font-weight:900; color:#2f6fd0; background:#eaf3ff; border-radius:999px; padding:2px 9px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .tm-sec{ border:1.5px solid #f1e7d9; border-radius:15px; padding:10px 11px; margin-bottom:9px; background:#fffdf8; min-width:0; }
+  .tm-sec > .tm-h{ display:flex; align-items:center; gap:6px; font-size:10.5px; font-weight:900; color:#b4652a; margin-bottom:6px; }
+  .tm-sec > .tm-h .when{ margin-left:auto; color:#b3aabf; font-weight:800; }
+  .tm-title{ font-size:13.5px; font-weight:900; letter-spacing:-.03em; line-height:1.3; word-break:break-word; }
+  .tm-brief{ margin:6px 0 0; font-size:11.5px; font-weight:700; color:#5a5270; white-space:pre-wrap; word-break:break-word; line-height:1.5; max-height:150px; overflow:auto; background:#fbfaf7; border:1px solid #f2ece2; border-radius:9px; padding:7px 8px; }
+  .tm-log{ list-style:none; margin:0; padding:0; max-height:230px; overflow:auto; -webkit-overflow-scrolling:touch; }
+  .tm-log li{ display:flex; gap:8px; align-items:flex-start; font-size:11.5px; font-weight:800; color:#4c4460; padding:4px 2px; border-bottom:1px dashed #f4efe6; }
+  .tm-log li:last-child{ border-bottom:0; }
+  .tm-log li .t{ flex:0 0 auto; font-size:10px; font-weight:900; color:#b3aabf; font-variant-numeric:tabular-nums; padding-top:2px; }
+  .tm-log li > span:last-child{ min-width:0; word-break:break-word; }
+  .tm-log li.now{ color:#2f6fd0; }
+  .tm-log li.now .t{ color:#7fb0e8; }
+  .tm-log li.now:before{ content:'●'; font-size:7px; color:#2f6fd0; margin-top:5px; animation:pulse 1.1s ease-in-out infinite; }
+  .tm-empty{ margin:0; font-size:11.5px; font-weight:800; color:#a9a1b8; padding:5px 2px; line-height:1.5; }
+  .tm-list{ display:flex; flex-direction:column; gap:6px; }
+  .tm-row{ display:flex; align-items:center; gap:8px; width:100%; text-align:left; border:1px solid #f2ece2; background:#fbfaf7; border-radius:11px; padding:7px 9px; min-width:0; }
+  .tm-row .r-main{ min-width:0; flex:1 1 auto; }
+  .tm-row .r-main b{ display:block; font-size:12px; font-weight:900; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tm-row .r-main span{ display:block; font-size:10.5px; font-weight:800; color:#a49bb6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tm-row .r-badge{ flex:0 0 auto; font-size:10px; font-weight:900; border-radius:999px; padding:2px 8px; color:#b4652a; background:#fff1df; white-space:nowrap; }
+  .tm-row .r-badge.done{ color:#0f8a62; background:#e8f9f1; }
+  .tm-actions{ display:flex; gap:6px; margin-top:2px; }
+  .tm-actions .btn-s{ flex:1 1 0; padding:9px 6px; font-size:12px; }
+  .tm-note{ margin:7px 0 0; font-size:10.5px; font-weight:800; color:#8d849f; line-height:1.5; }
+  .plan-list{ margin:7px 0 0; padding:0; list-style:none; counter-reset:pl; }
+  .plan-list li{ display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-top:1px dashed #f2ece2; counter-increment:pl; }
+  .plan-list li:first-child{ border-top:0; }
+  .plan-list li:before{ content:counter(pl); flex:0 0 auto; width:19px; height:19px; border-radius:50%; background:#f2eefc; color:#5d4f96; font-size:10.5px; font-weight:900; display:grid; place-items:center; margin-top:1px; }
+  .plan-list .pl-body{ min-width:0; }
+  .plan-list .pl-body b{ display:block; font-size:12px; font-weight:900; }
+  .plan-list .pl-body span{ display:block; font-size:11px; font-weight:800; color:#6d6484; line-height:1.45; word-break:break-word; }
+  .child-row{ border-top:1px dashed #f2ece2; padding:6px 0; }
+  .child-row:first-child{ border-top:0; }
+  .child-row b{ font-size:11.5px; font-weight:900; }
+  .child-row span{ display:block; font-size:11px; font-weight:700; color:#5a5270; white-space:pre-wrap; word-break:break-word; line-height:1.45; margin-top:2px; }
+  .child-row span.r-badge{ margin-top:3px; }
+
   /* ---------- 반응형 ---------- */
   @media (max-width: 1180px){
     .panel{ flex-basis:340px; width:340px; }
@@ -410,6 +457,13 @@
     .room{ padding:10px 9px; }
     .office-head h2{ font-size:16px; }
     .toast{ bottom: calc(70px + env(safe-area-inset-bottom,0px)); }
+    .modal{ padding:10px; align-items:flex-start; }
+    .modal-card{ max-height:min(90vh, 760px); border-radius:19px; }
+    .tm-brief{ max-height:110px; }
+    .tm-log{ max-height:170px; }
+    .tm-actions .btn-s{ font-size:11px; padding:8px 4px; }
+    .ap-actions{ flex-wrap:wrap; }
+    .ap-actions .btn-s{ flex:1 1 44%; }
   }
   @media (max-width: 420px){
     .team-grid{ gap:6px; }
@@ -468,6 +522,16 @@
       <button class="modal-close" type="button" data-act="settings-close" aria-label="닫기">✕</button>
     </div>
     <div class="modal-body" id="settingsBody"></div>
+  </div>
+</div>
+
+<div class="modal" id="teamModal" hidden role="dialog" aria-modal="true" aria-labelledby="teamModalTitle">
+  <div class="modal-card team-modal-card">
+    <div class="modal-head">
+      <h2 id="teamModalTitle">팀 작업 현황</h2>
+      <button class="modal-close" type="button" data-act="team-modal-close" aria-label="닫기">✕</button>
+    </div>
+    <div class="modal-body" id="teamModalBody"></div>
   </div>
 </div>
 
@@ -551,6 +615,8 @@
     draft: { team: 'cs', title: '', text: '', material: '' },
     rejectOpen: {}, details: {},
     busy: {}, queue: [], running: false,
+    teamModal: null, directHint: '',
+    pipe: [], pipeRunning: false, planQueue: [], planRunning: false,
     saveTimer: null, saveChain: Promise.resolve(), saveState: 'idle',
     lastActivityAt: 0, settingsMsg: ''
   };
@@ -3802,13 +3868,33 @@ var QR = (function () {
   }
   function teamStatus(teamId) {
     var list = workFor(teamId);
-    for (var i = 0; i < list.length; i++) if (list[i].status === 'working') return 'working';
+    for (var i = 0; i < list.length; i++) {
+      var w0 = list[i];
+      if (w0.status === 'working' || w0.status === 'queued') return 'working';
+      if (w0.kind === 'delegation' && w0.status === 'approved' && w0.phase === 'run') return 'working';
+    }
     for (var j = 0; j < list.length; j++) if (list[j].status === 'waiting') return 'waiting';
     for (var k = list.length - 1; k >= 0; k--) {
+      if (list[k].status === 'done') return 'done';
       if (list[k].status === 'approved' && !list[k].nextDone) return 'done';
       if (list[k].status === 'approved') return 'done';
     }
     return 'idle';
+  }
+  /* 진행 중이거나 대기열에 있거나 최근 보고가 있으면 현황을 보여 줘요 */
+  function teamActive(teamId) {
+    var list = workFor(teamId);
+    for (var i = list.length - 1; i >= 0; i--) {
+      var w = list[i];
+      if (w.status === 'working' || w.status === 'queued' || w.status === 'waiting') return true;
+      if (w.kind === 'delegation' && w.status === 'approved') return true;
+      var t = Date.parse(w.updatedAt || w.at || '');
+      if ((w.status === 'done' || w.status === 'approved' || w.status === 'failed' || w.status === 'rejected') && t && (Date.now() - t) < 30 * 60000) return true;
+    }
+    var q = S.queue || [];
+    for (var k = 0; k < q.length; k++) { var qw = workById(q[k]); if (qw && qw.teamId === teamId) return true; }
+    if (teamId === 'sec' && ((S.pipe && S.pipe.length) || (S.planQueue && S.planQueue.length) || S.planRunning || S.pipeRunning)) return true;
+    return false;
   }
   function waitingList() {
     var out = [], list = (S.office && S.office.work) || [];
@@ -3859,9 +3945,34 @@ var QR = (function () {
   }
   function pushLog(item, text) {
     if (!item) return;
+    var at = nowIso();
+    var line = String(text).slice(0, 200);
     item.log = item.log || [];
-    item.log.push({ at: nowIso(), text: String(text).slice(0, 200) });
+    item.log.push({ at: at, text: line });
     if (item.log.length > 24) item.log = item.log.slice(item.log.length - 24);
+    /* 실시간 진행 로그 — 현황 모달이 이 기록을 그대로 보여 줘요 */
+    item.progressLog = item.progressLog || [];
+    item.progressLog.push({ at: at, text: line });
+    if (item.progressLog.length > 80) item.progressLog = item.progressLog.slice(item.progressLog.length - 80);
+  }
+  function elapsedLabel(iso) {
+    var t = Date.parse(iso || '');
+    if (!t) return '';
+    var d = Date.now() - t;
+    if (d < 0) d = 0;
+    var s = Math.floor(d / 1000);
+    if (s < 60) return Math.max(1, s) + '초째';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + '분 ' + (s % 60) + '초째';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + '시간 ' + (m % 60) + '분째';
+    return Math.floor(h / 24) + '일째';
+  }
+  function clockLabel(iso) {
+    var t = Date.parse(iso || '');
+    if (!t) return '';
+    var d = new Date(t);
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
   }
   function whenLabel(iso) {
     var t = Date.parse(iso || '');
@@ -4006,6 +4117,7 @@ var QR = (function () {
     var sp = splitModelId(id);
     var pid = (sp.pid && PROVIDERS[sp.pid]) ? sp.pid : 'gemini';
     var model = sp.model || modelList(pid)[0];
+    var onStep = opts && opts.onStep ? opts.onStep : null;
     if (!hasKey(pid)) return { ok: false, status: 0, error: PROVIDERS[pid].label + ' 키가 아직 없어요. ⚙️ 설정에서 무료 키를 넣어 주세요.' };
     var tools = toolsForTeam(team.id);
     var tried = {}, switched = 0;
@@ -4023,6 +4135,7 @@ var QR = (function () {
           tried[deadAlt] = 1;
           pid = dsp.pid; model = dsp.model; id = deadAlt;
           toast('이 모델은 더 이상 쓸 수 없어 ' + modelShort(deadAlt) + '(으)로 이어서 해요.');
+          if (onStep) onStep('모델 전환 · ' + modelShort(deadAlt));
           res = await callWithKeys(pid, model, { system: system, messages: messages }, { maxTokens: (opts && opts.maxTokens) || 2600 });
         }
       }
@@ -4037,6 +4150,7 @@ var QR = (function () {
         model = bsp.model;
         id = alt;
         toast(fromShort + ' 한도/혼잡 → ' + modelShort(alt) + '(으)로 이어서 보내요.');
+        if (onStep) onStep('모델 전환 · ' + fromShort + ' → ' + modelShort(alt) + ' (한도·혼잡)');
         res = await callWithKeys(pid, model, { system: system, messages: messages }, { maxTokens: (opts && opts.maxTokens) || 2600 });
       }
       return res;
@@ -4246,11 +4360,26 @@ var QR = (function () {
   }
 
   /* ---------- 팀 작업 실행 ---------- */
+  var TOOL_STEP = {
+    family_data: '가족 기록 확인 중',
+    code_list: '화면 목록 보는 중',
+    search_code: '관련 화면 찾는 중',
+    read_code_slice: '화면 내용 읽는 중',
+    code_read: '화면 내용 읽는 중',
+    code_edit: '수정안 만드는 중'
+  };
+  function toolStepLabel(name) {
+    return TOOL_STEP[name] || '도구로 확인 중';
+  }
   async function runTeamAgent(item, team) {
     var msgs = [{ role: 'user', text: buildTeamInput(item, team) }];
     var last = '';
+    pushLog(item, '업무 파악 중');
     for (var step = 0; step < 8; step++) {
-      var res = await officeCall(team, buildTeamSystem(team), msgs, { maxTokens: 2800 });
+      var res = await officeCall(team, buildTeamSystem(team), msgs, {
+        maxTokens: 2800,
+        onStep: function (t) { pushLog(item, t); if (S.teamModal) renderAll(); }
+      });
       if (!res.ok) {
         if (step === 0) throw new Error(errShort(res));
         item.error = errShort(res);
@@ -4274,6 +4403,7 @@ var QR = (function () {
         if (!allowed[name]) {
           out = { text: '이 사무실에서는 그 도구를 쓸 수 없어요. 쓸 수 있는 도구: ' + Object.keys(allowed).join(', '), label: '도구 제한' };
         } else {
+          pushLog(item, toolStepLabel(name));
           var tool = toolByName(name);
           try { out = await tool.run(normalizeToolArgs(name, args), { threadId: item.id }); }
           catch (e) { out = { text: '도구를 실행하지 못했어요: ' + (e && e.message ? e.message : ''), label: '오류' }; }
@@ -4281,16 +4411,18 @@ var QR = (function () {
             var prop = S.proposals[out.card.id];
             if (prop) {
               item.code = codeFromProposal(prop, args);
-              pushLog(item, '수정안 준비 · ' + fileLabel(prop.repo, prop.path) + ' (+' + prop.diff.added + ' −' + prop.diff.removed + ')');
+              pushLog(item, '수정안 점검 중 · ' + fileLabel(prop.repo, prop.path) + ' (+' + prop.diff.added + ' −' + prop.diff.removed + ')');
             }
           }
         }
         msgs.push({ role: 'assistant', text: '도구를 부릅니다: ' + name });
         msgs.push({ role: 'user', text: '[도구 결과 ' + name + ']\n' + clip(out.text || '', 5000) });
         pushLog(item, '도구 · ' + name + (out.label ? ' (' + out.label + ')' : ''));
+        if (S.teamModal) renderAll();
       }
       if (step === 7) break;
     }
+    pushLog(item, '결과 정리 중');
     return parseTeamReport(last);
   }
   function codeFromProposal(prop, args) {
@@ -4391,6 +4523,357 @@ var QR = (function () {
     return item.secretary;
   }
 
+  /* ==================================================================
+     비서 직접 지시 — 배분 계획 → 대표님 승인 → 팀 순차 실행 → 취합 보고
+     ================================================================== */
+  function secretaryPlanSystem() {
+    var lines = [];
+    lines.push('너는 jadenfamily 가족의 AI 사무실에서 일하는 "비서"다.');
+    lines.push('대표님이 비서에게 일을 맡기면, 어떤 팀에게 어떤 순서로 나눠 맡길지 "배분 계획"을 세운다. 아직 일을 실행하지 않는다.');
+    lines.push(officeFacts());
+    lines.push('');
+    lines.push('[팀 — deptId로만 고른다]');
+    for (var i = 0; i < S.office.teams.length; i++) {
+      var t = S.office.teams[i];
+      lines.push('- ' + t.id + ' (' + t.name + '): ' + (t.desc || ''));
+    }
+    lines.push('');
+    lines.push('[규칙]');
+    lines.push('- 필요 없는 팀은 넣지 않는다. 2~4개 팀으로 나누고 많아도 5개를 넘기지 않는다.');
+    lines.push('- 팀은 적은 순서대로 일한다. 앞 팀의 결과가 다음 팀에 자료로 넘어가니, 뒤 팀의 prompt에는 "앞 팀 결과를 이어받아 무엇을 할지"를 적는다.');
+    lines.push('- 화면 코드를 고치는 일은 dev에 맡기고, dev 뒤에는 반드시 qc를 넣어 검수하게 한다. 코드 반영은 대표님 최종 승인 뒤에만 한다.');
+    lines.push('- 각 prompt는 그 팀이 바로 일할 수 있는 구체적인 지시문으로 쓴다. 대표님 지시에 없는 일을 만들지 않는다.');
+    lines.push('- title은 20자 안팎의 짧은 일 이름으로 쓴다.');
+    lines.push('');
+    lines.push('[출력 형식 — 마지막에 ```json 블록 하나]');
+    lines.push('```json');
+    lines.push('{"summary":"어떻게 나눌지 2~3줄","plan":[{"deptId":"plan","title":"짧은 일 이름","prompt":"그 팀에 그대로 전달할 지시문"}],"points":["대표님이 확인할 점"],"recommend":"한 줄"}');
+    lines.push('```');
+    return lines.join('\n');
+  }
+  function buildPlanInput(item, note) {
+    var lines = [];
+    lines.push('[배분 계획 요청]');
+    lines.push('');
+    lines.push('[대표님 지시]');
+    lines.push(String(item.brief || '').slice(0, 6000));
+    var mats = materialText(item);
+    if (mats) { lines.push(''); lines.push('[넘겨받은 자료]'); lines.push(mats); }
+    if (note) { lines.push(''); lines.push('[대표님 반려 사유 — 이 점을 고쳐 계획을 다시 세워 주세요]'); lines.push(String(note).slice(0, 800)); }
+    if (item.planNotes) { lines.push(''); lines.push('[이전 반려 기록]'); lines.push(clip(item.planNotes, 1200)); }
+    lines.push('');
+    lines.push('위 지시를 어떤 팀에게 어떤 순서로 나눠 맡길지 배분 계획을 세워 ```json으로 답해 주세요. 아직 일을 실행하지 마세요.');
+    return lines.join('\n');
+  }
+  function normalizePlan(obj) {
+    var out = [], raw = obj && obj.plan;
+    if (!raw) return out;
+    if (!(Object.prototype.toString.call(raw) === '[object Array]')) raw = [raw];
+    for (var i = 0; i < raw.length && out.length < 5; i++) {
+      var x = raw[i];
+      if (!x || typeof x !== 'object') continue;
+      var nameOrId = String(x.deptId || x.dept || x.teamId || x.team || '');
+      var key = teamById(nameOrId) ? nameOrId : teamKeyFromName(nameOrId);
+      if (!key || key === 'sec' || !teamById(key)) continue;
+      var title = String(x.title || x.name || '').trim().slice(0, 60);
+      var prompt = String(x.prompt || x.brief || x.text || '').trim().slice(0, 1500);
+      if (!prompt) continue;
+      out.push({ deptId: key, title: title || (teamById(key).name + ' 일'), prompt: prompt });
+    }
+    return out;
+  }
+  function fallbackPlan(item) {
+    var text = String((item && item.brief) || '');
+    var ids;
+    if (/코드|화면|버그|고쳐|수정|개발/i.test(text)) ids = ['plan', 'dev', 'qc'];
+    else if (/디자인|색|글자|배치|모양/i.test(text)) ids = ['design'];
+    else if (/찾아|조사|알아봐|비교|리서치/i.test(text)) ids = ['research'];
+    else if (/접수|요청|불편|문의/i.test(text)) ids = ['cs'];
+    else ids = ['plan'];
+    var out = [];
+    for (var i = 0; i < ids.length; i++) {
+      var t = teamById(ids[i]);
+      if (!t) continue;
+      out.push({ deptId: ids[i], title: t.name + ' 일', prompt: '[대표님 지시]\n' + clip(text, 900) + '\n\n맡은 부분을 정리해 보고해 주세요.' });
+    }
+    return out;
+  }
+  async function buildDelegationPlan(item, note) {
+    var res = await officeCall(secretaryTeam(), secretaryPlanSystem(), [{ role: 'user', text: buildPlanInput(item, note) }], {
+      maxTokens: 1600,
+      onStep: function (t) { pushLog(item, t); if (S.teamModal) renderAll(); }
+    });
+    var obj = res && res.ok ? findReportObj(res.text) : null;
+    var out = { list: normalizePlan(obj), summary: '', points: [], recommend: '', detail: '' };
+    if (obj) {
+      out.summary = String(obj.summary || '').trim();
+      out.detail = String(obj.detail || '').trim();
+      if (Object.prototype.toString.call(obj.points) === '[object Array]') {
+        for (var i = 0; i < obj.points.length && out.points.length < 5; i++) {
+          var p = String(obj.points[i] || '').trim();
+          if (p) out.points.push(p);
+        }
+      }
+      out.recommend = String(obj.recommend || '').trim();
+    }
+    if (!out.list.length) out.list = fallbackPlan(item);
+    if (!out.summary) out.summary = '지시를 ' + out.list.length + '개 팀으로 나눠 맡기겠습니다. 승인해 주시면 순서대로 전달하고, 끝나면 결과를 취합해 다시 올릴게요.';
+    if (!res || !res.ok) out.summary = 'AI로 계획을 정리하지 못해 기본 순서로 준비했어요. ' + out.summary;
+    if (!out.points.length) out.points = ['배분 순서와 범위가 맞는지 확인', '승인하면 팀들이 순서대로 일해요'];
+    if (!out.recommend) out.recommend = '승인하면 바로 시작할게요.';
+    return out;
+  }
+  function planLine(list) {
+    var out = [];
+    for (var i = 0; i < (list || []).length; i++) {
+      var t = teamById(list[i].deptId);
+      out.push((i + 1) + '. ' + (t ? t.name : list[i].deptId));
+    }
+    return out.join(' → ');
+  }
+  function startSecretaryDirective(d, opts) {
+    if (!S.office) return null;
+    var text = String(d.text || '').trim();
+    if (!text) { toast('비서에게 맡길 일을 적어 주세요.'); return null; }
+    var team = secretaryTeam();
+    var id = teamModelId(team), sp = splitModelId(id);
+    if (!hasKey(sp.pid)) { toast('⚙️ 설정에서 ' + (PROVIDERS[sp.pid] ? PROVIDERS[sp.pid].label : 'AI') + ' 키를 먼저 넣어 주세요.'); return null; }
+    var title = String(d.title || '').trim() || firstLines(text, 1).slice(0, 40) || '새 일';
+    var w = newWork('sec', title, text, d.material ? [d.material] : []);
+    w.kind = 'delegation';
+    w.phase = 'plan';
+    w.delegationPlan = [];
+    w.childIds = [];
+    pushLog(w, '대표님 지시');
+    S.draft = { team: 'sec', title: '', text: '', material: '' };
+    S.clearDraft = true;
+    S.directHint = '';
+    var ti = document.getElementById('directTitle'); if (ti) ti.value = '';
+    var tx = document.getElementById('directText'); if (tx) tx.value = '';
+    var mt = document.getElementById('directMaterial'); if (mt) mt.value = '';
+    if (!opts || !opts.keepTab) S.tab = 'office';
+    renderAll(); saveOfficeSoon(0);
+    enqueuePlan(w.id, '');
+    toast('비서에게 지시했어요. 어떤 팀에 어떤 순서로 맡길지 배분 계획을 세워 결재함에 올려요.');
+    return w;
+  }
+  function enqueuePlan(workId, note) {
+    S.planQueue = S.planQueue || [];
+    S.planQueue.push({ id: workId, note: note || '' });
+    pumpPlan();
+  }
+  async function pumpPlan() {
+    if (S.planRunning) return;
+    var job = (S.planQueue || []).shift();
+    if (!job) return;
+    S.planRunning = true;
+    try { await runPlan(job.id, job.note); }
+    catch (e) { /* runPlan 안에서 처리해요 */ }
+    finally { S.planRunning = false; pumpPlan(); }
+  }
+  async function runPlan(workId, note) {
+    var item = workById(workId);
+    if (!item) return;
+    item.status = 'working';
+    item.phase = 'plan';
+    item.updatedAt = nowIso();
+    if (!item.startedAt) item.startedAt = nowIso();
+    S.busy[item.id] = { at: Date.now() };
+    pushLog(item, '업무 파악 중');
+    renderAll(); saveOfficeSoon(0);
+    try {
+      var plan = await buildDelegationPlan(item, note);
+      item.delegationPlan = plan.list;
+      item.secretary = {
+        summary: plan.summary,
+        points: plan.points,
+        recommend: plan.recommend,
+        next: [],
+        at: nowIso()
+      };
+      item.report = { summary: plan.summary, detail: plan.detail || plan.list.map(function (p) {
+        var t = teamById(p.deptId) || { name: p.deptId };
+        return '[' + t.name + '] ' + p.title + '\n' + p.prompt;
+      }).join('\n\n'), next: [], at: nowIso() };
+      item.status = 'waiting';
+      item.updatedAt = nowIso();
+      pushLog(item, '배분 계획 · ' + planLine(plan.list));
+      pushLog(item, '비서 배분 계획 → 대표님 결재 대기');
+      toast('비서가 배분 계획을 올렸어요. 대표실 결재함에서 승인해 주세요.');
+    } catch (e) {
+      item.status = 'failed';
+      item.error = String(e && e.message ? e.message : e);
+      pushLog(item, '실패 · ' + clip(item.error, 120));
+      toast('배분 계획을 세우지 못했어요: ' + clip(item.error, 90));
+    } finally {
+      delete S.busy[item.id];
+      item.updatedAt = nowIso();
+      renderAll(); saveOfficeSoon(0);
+    }
+  }
+  function startDelegation(secId) {
+    var sec = workById(secId);
+    if (!sec) return;
+    if (!sec.delegationPlan || !sec.delegationPlan.length) { toast('배분 계획이 비어 있어요.'); return; }
+    sec.status = 'approved';
+    sec.approvedAt = nowIso();
+    sec.phase = 'run';
+    sec.childIds = [];
+    pushLog(sec, '대표님 승인 · 팀에 순서대로 전달 시작');
+    for (var i = 0; i < sec.delegationPlan.length; i++) {
+      var p = sec.delegationPlan[i];
+      var t = teamById(p.deptId);
+      if (!t) continue;
+      var brief = '[대표님 지시]\n' + clip(sec.brief, 3000) +
+        '\n\n[비서 배분 계획 ' + (i + 1) + '/' + sec.delegationPlan.length + ']\n' + p.prompt +
+        (i > 0 ? '\n\n앞 팀의 결과를 이어받아 진행해 주세요.' : '');
+      var w = newWork(p.deptId, p.title || (t.name + ' 일'), brief, [], sec.id);
+      w.kind = 'delegation-child';
+      w.secId = sec.id;
+      w.order = i;
+      w.status = 'queued';
+      pushLog(w, '비서 배분 계획으로 배정');
+      sec.childIds.push(w.id);
+    }
+    renderAll(); saveOfficeSoon(0);
+    enqueuePipeline(sec.id);
+    toast('배분 계획을 승인했어요. 비서가 팀에 순서대로 전달하고, 끝나면 하나로 취합해 올려요.');
+  }
+  function enqueuePipeline(secId) {
+    S.pipe = S.pipe || [];
+    S.pipe.push(secId);
+    pumpPipeline();
+  }
+  async function pumpPipeline() {
+    if (S.pipeRunning) return;
+    var id = (S.pipe || []).shift();
+    if (!id) return;
+    S.pipeRunning = true;
+    try { await runPipeline(id); }
+    catch (e) { /* runPipeline 안에서 처리해요 */ }
+    finally { S.pipeRunning = false; pumpPipeline(); }
+  }
+  function secChildList(sec) {
+    var out = [];
+    for (var i = 0; i < ((sec && sec.childIds) || []).length; i++) {
+      var c = workById(sec.childIds[i]);
+      if (c) out.push(c);
+    }
+    return out;
+  }
+  async function runPipeline(secId) {
+    var sec = workById(secId);
+    if (!sec) return;
+    S.busy['pipe_' + secId] = { at: Date.now() };
+    try {
+      var ids = (sec.childIds || []).slice();
+      for (var i = 0; i < ids.length; i++) {
+        var child = workById(ids[i]);
+        if (!child) continue;
+        var prior = [];
+        for (var k = 0; k < i; k++) {
+          var pc = workById(ids[k]);
+          if (pc && pc.report) prior.push(pc.id);
+        }
+        child.materialIds = prior.slice(-2);
+        child.status = 'working';
+        child.startedAt = nowIso();
+        child.updatedAt = nowIso();
+        sec.currentChildId = child.id;
+        sec.updatedAt = nowIso();
+        S.busy[child.id] = { at: Date.now() };
+        var tname = (teamById(child.teamId) || { name: child.teamId }).name;
+        pushLog(sec, tname + '에 일을 전달 (' + (i + 1) + '/' + ids.length + ')');
+        renderAll(); saveOfficeSoon(0);
+        try {
+          child.report = await runTeamAgent(child, teamById(child.teamId) || { id: child.teamId, name: child.teamId, desc: '' });
+          child.status = 'done';
+          child.doneAt = nowIso();
+          pushLog(child, '보고 도착');
+          pushLog(sec, tname + ' 결과 도착');
+          if (child.code) pushLog(sec, '수정안 도착 · ' + fileLabel(child.code.repo, child.code.path) + ' (아직 반영 전)');
+        } catch (e) {
+          child.status = 'failed';
+          child.error = String(e && e.message ? e.message : e);
+          child.report = child.report || { summary: '작업을 마치지 못했어요.', detail: child.error, next: [], at: nowIso() };
+          pushLog(child, '실패 · ' + clip(child.error, 120));
+          pushLog(sec, tname + ' 실패 · ' + clip(child.error, 90));
+        }
+        delete S.busy[child.id];
+        child.updatedAt = nowIso();
+        sec.updatedAt = nowIso();
+        renderAll(); saveOfficeSoon(0);
+      }
+      sec.phase = 'collect';
+      pushLog(sec, '비서 취합 보고 작성 중');
+      renderAll(); saveOfficeSoon(0);
+      var rep = await buildCollectReport(sec);
+      sec.report = rep.report;
+      sec.secretary = rep.secretary;
+      sec.code = rep.code || null;
+      sec.status = 'waiting';
+      sec.phase = 'report';
+      sec.updatedAt = nowIso();
+      pushLog(sec, '비서 최종 취합 보고 → 대표실 결재 대기');
+      toast('비서가 최종 취합 보고를 올렸어요. 대표실 결재함에서 확인해 주세요.');
+    } finally {
+      delete S.busy['pipe_' + secId];
+      if (sec) { sec.updatedAt = nowIso(); sec.currentChildId = ''; }
+      renderAll(); saveOfficeSoon(0);
+    }
+  }
+  async function buildCollectReport(sec) {
+    var kids = secChildList(sec);
+    var rows = [], code = null;
+    for (var i = 0; i < kids.length; i++) {
+      var c = kids[i], t = teamById(c.teamId) || { name: c.teamId };
+      var rep = c.report || {};
+      rows.push('[' + t.name + '] ' + c.title +
+        '\n- 상태: ' + (c.status === 'failed' ? ('실패 · ' + clip(c.error || '', 200)) : '완료') +
+        '\n- 핵심: ' + clip(rep.summary || '', 600) +
+        '\n- 상세: ' + clip(rep.detail || '', 1600) +
+        (c.code ? ('\n- 코드 수정안: ' + fileLabel(c.code.repo, c.code.path) + ' (+' + c.code.added + ' −' + c.code.removed + ') · ' + (c.code.checkOk ? '자동 검사 통과' : '자동 검사 문제 있음') + ' · 아직 반영 전') : ''));
+      if (c.code) code = c.code;
+    }
+    var detail = rows.join('\n\n');
+    var text = '[취합 보고]\n\n[맡긴 일] ' + sec.title + '\n[대표님 지시] ' + clip(sec.brief, 1500) +
+      '\n\n[팀별 결과]\n' + clip(detail, 9000);
+    var res = await officeCall(secretaryTeam(), buildSecretarySystem(), [{ role: 'user', text: text }], {
+      maxTokens: 1500,
+      onStep: function (t) { pushLog(sec, t); if (S.teamModal) renderAll(); }
+    });
+    var obj = res && res.ok ? findReportObj(res.text) : null;
+    var summary = '', points = [], recommend = '';
+    if (obj) {
+      summary = String(obj.summary || '').trim();
+      if (Object.prototype.toString.call(obj.points) === '[object Array]') {
+        for (var p = 0; p < obj.points.length && points.length < 5; p++) {
+          var s = String(obj.points[p] || '').trim();
+          if (s) points.push(s);
+        }
+      }
+      recommend = String(obj.recommend || '').trim();
+    }
+    if (!summary) {
+      var parts = [];
+      for (var q = 0; q < kids.length; q++) {
+        var kt = teamById(kids[q].teamId) || { name: kids[q].teamId };
+        parts.push(kt.name + ': ' + clip((kids[q].report && kids[q].report.summary) || '보고 없음', 160));
+      }
+      summary = parts.join('\n') || '팀 결과를 모았어요.';
+    }
+    if (!points.length) {
+      if (code) points.push('수정안은 아직 반영 전이에요 — QC 검수 또는 최종 승인하고 반영 중 하나를 골라 주세요.');
+      points.push('팀별 결과를 확인해 주세요.');
+    }
+    if (!recommend) recommend = code ? 'QC 검수를 거친 뒤 최종 승인하면 반영돼요.' : '바로 승인해도 됩니다.';
+    return {
+      report: { summary: summary, detail: detail, next: [], at: nowIso() },
+      secretary: { summary: summary, points: points, recommend: recommend, next: [], collect: true, at: nowIso() },
+      code: code
+    };
+  }
+
   /* ---------- 실행 큐 (한 번에 하나씩) ---------- */
   function enqueueRun(workId) {
     S.queue.push(workId);
@@ -4410,6 +4893,7 @@ var QR = (function () {
     if (!item) return;
     var team = teamById(item.teamId) || { id: item.teamId, name: item.teamId, desc: '' };
     item.status = 'working';
+    item.startedAt = nowIso();
     item.updatedAt = nowIso();
     S.busy[item.id] = { at: Date.now() };
     pushLog(item, team.name + ' 작업 시작');
@@ -4418,6 +4902,8 @@ var QR = (function () {
       item.report = await runTeamAgent(item, team);
       item.updatedAt = nowIso();
       pushLog(item, '팀 보고 도착');
+      renderAll(); saveOfficeSoon(0);
+      pushLog(item, '비서 정리 보고 작성 중');
       renderAll(); saveOfficeSoon(0);
       var sec = await runSecretary(item);
       item.secretary = sec;
@@ -4443,6 +4929,7 @@ var QR = (function () {
      ================================================================== */
   function startDirective(d, opts) {
     if (!S.office) return null;
+    if (d.teamId === 'sec') return startSecretaryDirective(d, opts);
     var team = teamById(d.teamId);
     if (!team) { toast('부서를 골라 주세요.'); return null; }
     var text = String(d.text || '').trim();
@@ -4452,6 +4939,8 @@ var QR = (function () {
     var title = String(d.title || '').trim() || firstLines(text, 1).slice(0, 40) || '새 일';
     var w = newWork(d.teamId, title, text, d.material ? [d.material] : []);
     pushLog(w, '대표님 지시');
+    if (d.sources) pushLog(w, '접수함 확인 중');
+    S.directHint = '';
     S.draft = { team: d.teamId, title: '', text: '', material: '' };
     S.clearDraft = true;
     var ti = document.getElementById('directTitle'); if (ti) ti.value = '';
@@ -4466,6 +4955,17 @@ var QR = (function () {
   function approveWork(id) {
     var item = workById(id);
     if (!item || item.status !== 'waiting') return;
+    if (item.kind === 'delegation') {
+      if (item.phase === 'plan') { startDelegation(id); return; }
+      item.status = 'approved';
+      item.approvedAt = nowIso();
+      item.nextDone = true;
+      item.nextAt = nowIso();
+      pushLog(item, '대표님 최종 승인');
+      renderAll(); saveOfficeSoon(0);
+      toast(item.code ? '최종 취합 보고를 승인했어요. 코드 수정안은 아직 반영 전이에요 — QC 검수나 바로 반영을 골라 주세요.' : '최종 취합 보고를 승인했어요.');
+      return;
+    }
     item.status = 'approved';
     item.approvedAt = nowIso();
     item.nextDone = false;
@@ -4490,6 +4990,22 @@ var QR = (function () {
     if (!item || item.status !== 'waiting') return;
     var reason = String(fieldVal('rej_' + id) || '').trim();
     if (!reason) { toast('반려 사유를 적어 주세요. 그 내용으로 팀이 다시 일해요.'); return; }
+    if (item.kind === 'delegation') {
+      item.rejectReason = clip(reason, 600);
+      item.rejectedAt = nowIso();
+      item.planNotes = (item.planNotes ? item.planNotes + '\n' : '') + '· ' + clip(reason, 300);
+      item.status = 'working';
+      item.phase = 'plan';
+      item.delegationPlan = [];
+      item.childIds = [];
+      S.rejectOpen[id] = false;
+      pushLog(item, '대표님 반려 · ' + clip(reason, 100));
+      pushLog(item, '반려 사유를 반영해 배분 계획 다시 세우는 중');
+      renderAll(); saveOfficeSoon(0);
+      enqueuePlan(id, reason);
+      toast('반려했어요. 비서가 사유를 반영해 배분 계획을 다시 세워요.');
+      return;
+    }
     item.status = 'rejected';
     item.rejectReason = clip(reason, 600);
     item.rejectedAt = nowIso();
@@ -4635,7 +5151,8 @@ var QR = (function () {
       title: '접수 건 취합 (' + pend.length + '건)',
       text: '아래 접수 건들을 취합해 주세요. 같은 요구는 묶고, 바로 할 일 / 결정이 필요한 일 / 나중에 할 일로 나눠 정리해 주세요.\n\n' +
         lines.join('\n'),
-      material: ''
+      material: '',
+      sources: true
     }, { keepTab: true });
     S.tab = 'office';
     renderAll();
@@ -4704,11 +5221,11 @@ var QR = (function () {
     var work = workFor(t.id), openN = 0, doneN = 0;
     for (var i = 0; i < work.length; i++) {
       if (work[i].status === 'waiting') openN++;
-      if (work[i].status === 'approved') doneN++;
+      if (work[i].status === 'approved' || work[i].status === 'done') doneN++;
     }
     var busy = false;
     for (var k = 0; k < work.length; k++) if (S.busy[work[k].id]) busy = true;
-    return '<button class="team-card" type="button" data-act="team-click" data-team="' + esc(t.id) + '" aria-label="' + esc(t.name) + '에 지시하기">' +
+    return '<button class="team-card" type="button" data-act="team-click" data-team="' + esc(t.id) + '" aria-label="' + esc(t.name) + ' 작업 현황 보기">' +
       '<span class="tc-top"><span class="avatar">' + charSvg(t) + '<i class="em">' + esc(t.emoji || '🧩') + '</i></span>' +
       '<span class="tc-name">' + esc(t.name) + '</span></span>' +
       '<span class="tc-model"><i class="' + esc(sp.pid) + '"></i><span>' + esc((prov ? prov.short + ' · ' : '') + modelShort(id)) + '</span></span>' +
@@ -4718,13 +5235,16 @@ var QR = (function () {
   }
   function apMini(w) {
     var team = teamById(w.teamId) || secretaryTeam();
-    var sec = w.secretary || {};
+    var sub = w.kind === 'delegation'
+      ? ('비서 ' + (w.phase === 'report' ? '최종 취합 보고' : '배분 계획') + ' · ' + ((w.delegationPlan || []).length) + '개 팀 · ' + whenLabel(w.updatedAt))
+      : (team.name + ' · 비서 정리 보고 · ' + whenLabel(w.updatedAt));
     return '<div class="ap-mini">' +
       '<span class="am-ic">' + esc(team.emoji || '📄') + '</span>' +
       '<span class="am-body"><b class="am-title">' + esc(w.title) + '</b>' +
-      '<span class="am-sub">' + esc(team.name + ' · 비서 정리 보고 · ' + whenLabel(w.updatedAt)) + '</span></span>' +
+      '<span class="am-sub">' + esc(sub) + '</span></span>' +
       '<span class="am-act">' +
-      '<button class="btn-s ok" type="button" data-act="approve" data-id="' + esc(w.id) + '">승인</button>' +
+      '<button class="btn-s ok" type="button" data-act="approve" data-id="' + esc(w.id) + '">' +
+      (w.kind === 'delegation' && w.phase === 'plan' ? '계획 승인' : '승인') + '</button>' +
       '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(w.id) + '">반려</button>' +
       '</span></div>';
   }
@@ -4735,7 +5255,7 @@ var QR = (function () {
     var h = '';
     var working = workingList().length;
     h += '<div class="office-head"><h2>건물 전체 · 1~5층</h2><p>' +
-      (working ? working + '팀이 일하고 있어요 · ' : '') + '팀 카드를 누르면 그 부서에 바로 지시할 수 있어요</p></div>';
+      (working ? working + '팀이 일하고 있어요 · ' : '') + '팀 카드를 누르면 지금 하는 일과 진행 상황을 볼 수 있어요</p></div>';
 
     /* 5F 대표실 */
     var wait = waitingList();
@@ -4772,18 +5292,10 @@ var QR = (function () {
 
     /* 1F 비서실 */
     var secTeam = secretaryTeam();
-    var secId = teamModelId(secTeam), ssp = splitModelId(secId);
-    var secBusy = false;
-    for (var b in S.busy) if (S.busy[b]) secBusy = true;
     h += '<section class="room lobby" id="room-1F"><div class="room-head">' +
-      '<span class="room-floor">1F</span><span class="room-name">로비 · 비서실</span><span class="room-sub">정리 보고 · 안내</span>' +
-      '</div><div class="team-grid"><div class="team-card" role="group" aria-label="비서">' +
-      '<span class="tc-top"><span class="avatar">' + charSvg(secTeam) + '<i class="em">🗒️</i></span>' +
-      '<span class="tc-name">비서</span></span>' +
-      '<span class="tc-model"><i class="' + esc(ssp.pid) + '"></i><span>' + esc((PROVIDERS[ssp.pid] ? PROVIDERS[ssp.pid].short + ' · ' : '') + modelShort(secId)) + '</span></span>' +
-      '<span class="tc-foot"><span class="status ' + (secBusy ? 'working' : 'idle') + '"><i></i>' + (secBusy ? '정리 중' : '대기 중') + '</span></span>' +
-      '</div></div>' +
-      '<p class="lobby-row"><span class="lz">모든 팀이 일을 마치면 비서가 핵심만 정리해 대표실 결재함으로 올려요. 대표님 승인 없이는 다음 단계로 넘어가지 않아요.</span></p>' +
+      '<span class="room-floor">1F</span><span class="room-name">로비 · 비서실</span><span class="room-sub">정리 보고 · 배분 · 취합</span>' +
+      '</div><div class="team-grid">' + teamCard(secTeam) + '</div>' +
+      '<p class="lobby-row"><span class="lz">비서를 누르면 지금 하는 일을 볼 수 있어요. 비서에게 일을 맡기면 어떤 팀에 어떤 순서로 나눌지 배분 계획을 먼저 올리고, 대표님이 승인하면 팀에 차례로 전달한 뒤 결과를 하나로 취합해 다시 결재함에 올려요. 대표님 승인 없이는 다음 단계로 넘어가지 않아요.</span></p>' +
       '</section>';
     box.innerHTML = h;
   }
@@ -4828,7 +5340,7 @@ var QR = (function () {
     renderTabs();
   }
   function teamOptions(sel) {
-    var h = '';
+    var h = '<option value="sec"' + (sel === 'sec' ? ' selected' : '') + '>1F · 비서</option>';
     for (var i = 0; i < S.office.teams.length; i++) {
       var t = S.office.teams[i];
       h += '<option value="' + esc(t.id) + '"' + (t.id === sel ? ' selected' : '') + '>' + esc(t.floor + ' · ' + t.name) + '</option>';
@@ -4851,7 +5363,9 @@ var QR = (function () {
     var h = '<section class="pane" data-pane="direct">';
     h += '<div class="pane-head"><h3>📝 지시하기</h3><span class="n">' + (workingList().length) + ' 진행 중</span></div>';
     h += '<div class="pane-body"><form id="directForm" autocomplete="off">';
+    if (S.directHint) h += '<p class="hint" style="color:#5d4f96;font-weight:900">' + esc(S.directHint) + '</p>';
     h += '<div class="field"><span class="lbl">부서</span><select id="directTeam">' + teamOptions(S.draft.team) + '</select></div>';
+    if (S.draft.team === 'sec') h += '<p class="hint">비서에게 맡기면 비서가 어떤 팀에 어떤 순서로 나눌지 배분 계획을 먼저 올려요. 승인하면 팀들이 차례로 일하고, 끝나면 비서가 결과를 하나로 취합해 다시 결재함에 올려요.</p>';
     h += '<div class="field"><span class="lbl">제목 (선택)</span><input id="directTitle" maxlength="60" placeholder="예: 11월 말 가계부 정리" value="' + esc(S.draft.title) + '"></div>';
     h += '<div class="field"><span class="lbl">지시 내용</span><textarea id="directText" placeholder="예: 이번 주 냉장고 재고로 만들 수 있는 저녁 메뉴 3가지를 정리해 줘.">' + esc(S.draft.text) + '</textarea></div>';
     h += '<div class="field"><span class="lbl">넘길 자료 (선택)</span><select id="directMaterial">' + materialOptions(S.draft.material) + '</select></div>';
@@ -4883,10 +5397,11 @@ var QR = (function () {
     return h;
   }
   function apCard(item) {
+    if (item.kind === 'delegation') return apDelegationCard(item);
     var team = teamById(item.teamId) || { name: item.teamId, emoji: '📄' };
     var sec = item.secretary || {};
     var rep = item.report || {};
-    var h = '<div class="ap-card' + (item.status === 'approved' ? ' approved' : (item.status === 'rejected' ? ' rejected' : '')) + '">';
+    var h = '<div class="ap-card' + (item.status === 'approved' ? ' approved' : (item.status === 'rejected' ? ' rejected' : '')) + '" data-work="' + esc(item.id) + '">';
     h += '<div class="ap-h"><span>' + esc(team.emoji || '📄') + ' 비서 최종 정리 보고</span><span class="who">· ' + esc(team.name) + '</span><span class="when">' + esc(whenLabel(item.updatedAt)) + '</span></div>';
     h += '<div class="ap-t">' + esc(item.title) + '</div>';
     h += '<div class="ap-sum">' + esc(sec.summary || rep.summary || '') + '</div>';
@@ -4934,6 +5449,132 @@ var QR = (function () {
       }
     } else if (item.status === 'rejected') {
       h += '<div class="ap-rec" style="background:#fff1f2;color:#c14160">반려함 · ' + esc(clip(item.rejectReason || '', 120)) + '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+  function pipelineLine(sec) {
+    var n = ((sec && sec.childIds) || []).length;
+    var done = 0, idx = 0, curName = '';
+    for (var i = 0; i < n; i++) {
+      var c = workById(sec.childIds[i]);
+      if (!c) continue;
+      if (c.status === 'done') done++;
+      if ((c.status === 'working' || c.status === 'queued') && !curName) {
+        curName = (teamById(c.teamId) || { name: c.teamId }).name;
+        idx = i + 1;
+      }
+    }
+    var now = idx ? idx : Math.min(done + 1, n);
+    return '<p class="tm-note">팀에 순서대로 전달 중 · ' + now + '/' + n + '번째' +
+      (curName ? ' · ' + esc(curName) + ' 진행 중' : '') + ' · 끝난 팀 ' + done + '</p>';
+  }
+  /* ---------- 비서 배분 계획·취합 보고 결재 카드 ---------- */
+  function childRow(c) {
+    var t = teamById(c.teamId) || { name: c.teamId, emoji: '📄' };
+    var rep = c.report || {};
+    var stateTxt = c.status === 'done' ? '완료' : c.status === 'failed' ? '실패' : (c.status === 'working' ? '작업 중' : (c.status === 'queued' ? '기다림' : '보고 전'));
+    var cls = c.status === 'done' ? 'done' : '';
+    var body = c.status === 'failed' ? (c.error || '작업을 마치지 못했어요.') : (rep.summary || (c.status === 'queued' ? '앞 팀이 끝나면 시작해요.' : '아직 보고 전이에요.'));
+    return '<div class="child-row"><b>' + esc(t.emoji + ' ' + t.name) + ' · ' + esc(c.title) + '</b>' +
+      '<span class="r-badge ' + cls + '">' + esc(stateTxt) + '</span>' +
+      '<span>' + esc(clip(body, 300)) + '</span>' +
+      (c.code ? '<span>' + esc('수정안 · ' + fileLabel(c.code.repo, c.code.path) + ' (+' + c.code.added + ' −' + c.code.removed + ') · 아직 반영 전') + '</span>' : '') +
+      '</div>';
+  }
+  function apDelegationCard(item) {
+    var plan = item.delegationPlan || [];
+    var phase = item.phase || 'plan';
+    var kids = secChildList(item);
+    var sec = item.secretary || {};
+    var headTxt = phase === 'report' ? '비서 최종 취합 보고' : ((phase === 'run' || phase === 'collect') ? '비서 배분 실행 중' : '비서 배분 계획');
+    var h = '<div class="ap-card delegation' + (item.status === 'approved' ? ' approved' : (item.status === 'rejected' ? ' rejected' : '')) + '" data-work="' + esc(item.id) + '">';
+    h += '<div class="ap-h"><span>🗒️ ' + esc(headTxt) + '</span><span class="who">· 비서</span><span class="when">' + esc(whenLabel(item.updatedAt)) + '</span></div>';
+    h += '<div class="ap-t">' + esc(item.title) + '</div>';
+    if (phase === 'plan') {
+      h += '<div class="ap-sum">' + esc(sec.summary || '') + '</div>';
+      if (plan.length) {
+        h += '<ol class="plan-list">';
+        for (var i = 0; i < plan.length; i++) {
+          var t = teamById(plan[i].deptId) || { name: plan[i].deptId, emoji: '📄' };
+          h += '<li><div class="pl-body"><b>' + esc(t.emoji + ' ' + t.name + ' · ' + plan[i].title) + '</b>' +
+            '<span>' + esc(clip(plan[i].prompt, 260)) + '</span></div></li>';
+        }
+        h += '</ol>';
+        h += '<p class="tm-note">승인하면 비서가 이 순서대로 팀에 전달하고, 모든 팀이 끝나면 결과를 하나로 취합해 다시 결재함에 올려요.</p>';
+      }
+    } else if (phase === 'run' || phase === 'collect') {
+      h += '<div class="ap-sum">' + esc(sec.summary || '배분 계획대로 팀에 순서대로 전달하고 있어요.') + '</div>';
+      h += pipelineLine(item);
+      if (kids.length) {
+        h += '<div class="tm-list" style="margin-top:7px">';
+        for (var r = 0; r < kids.length; r++) h += childRow(kids[r]);
+        h += '</div>';
+      }
+    } else {
+      h += '<div class="ap-sum">' + esc(sec.summary || (item.report && item.report.summary) || '') + '</div>';
+      if (kids.length) {
+        h += '<div class="tm-list" style="margin-top:7px">';
+        for (var k = 0; k < kids.length; k++) h += childRow(kids[k]);
+        h += '</div>';
+      }
+      if (item.code) {
+        var c = item.code;
+        h += '<div class="codemeta"><span>' + esc(fileLabel(c.repo, c.path)) + '</span><span class="' + (c.checkOk ? 'ok' : 'bad') + '">' + (c.checkOk ? '자동 검사 통과' : '자동 검사 문제') + '</span>' +
+          '<span>+' + c.added + ' −' + c.removed + '</span><span>아직 반영 전</span></div>';
+      }
+      if (sec.points && sec.points.length) {
+        h += '<ul class="ap-points">';
+        for (var p = 0; p < sec.points.length; p++) h += '<li>' + esc(sec.points[p]) + '</li>';
+        h += '</ul>';
+      }
+      if (sec.recommend) h += '<div class="ap-rec">추천: ' + esc(sec.recommend) + '</div>';
+    }
+    if (item.report && item.report.detail) {
+      var dk = 'd_' + item.id;
+      h += '<details class="ap-d" data-key="' + esc(dk) + '"' + (S.details[dk] ? ' open' : '') + '><summary>팀별 결과 원문</summary><div class="ap-detail">' + esc(item.report.detail) + '</div></details>';
+    }
+    if (item.code && item.code.diffText) {
+      var dk2 = 'c_' + item.id;
+      h += '<details class="ap-d" data-key="' + esc(dk2) + '"' + (S.details[dk2] ? ' open' : '') + '><summary>코드 수정안 · 변경 내용</summary><div class="diffbox"><pre>' + diffHtmlPlain(item.code.diffText) + '</pre></div>' +
+        (item.code.checkErrors && item.code.checkErrors.length ? '<div class="ap-detail">검사: ' + esc(item.code.checkErrors.join('\n')) + '</div>' : '') + '</details>';
+    }
+    if (item.log && item.log.length) {
+      var dk3 = 'l_' + item.id;
+      h += '<details class="ap-d" data-key="' + esc(dk3) + '"' + (S.details[dk3] ? ' open' : '') + '><summary>작업 기록</summary><div class="ap-detail">' +
+        esc(item.log.map(function (x) { return '· ' + x.text; }).join('\n')) + '</div></details>';
+    }
+    if (item.status === 'waiting') {
+      h += '<div class="ap-actions">';
+      if (phase === 'plan') {
+        h += '<button class="btn-s ok" type="button" data-act="approve" data-id="' + esc(item.id) + '">배분 계획 승인</button>' +
+          '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(item.id) + '">반려</button>';
+      } else if (item.code) {
+        h += '<button class="btn-s ok" type="button" data-act="sec-qc" data-id="' + esc(item.id) + '">QC 검수 요청</button>' +
+          '<button class="btn-s ok" type="button" data-act="sec-commit" data-id="' + esc(item.id) + '">최종 승인하고 반영</button>' +
+          '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(item.id) + '">반려</button>';
+      } else {
+        h += '<button class="btn-s ok" type="button" data-act="approve" data-id="' + esc(item.id) + '">승인</button>' +
+          '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(item.id) + '">반려</button>';
+      }
+      h += '</div>';
+      if (S.rejectOpen[item.id]) {
+        h += '<div class="rejectbox"><textarea id="rej_' + esc(item.id) + '" placeholder="반려 사유 — 이 내용으로 비서가 배분 계획을 다시 세워요"></textarea>' +
+          '<div class="btn-line" style="margin-top:6px"><button class="btn warn" type="button" data-act="reject" data-id="' + esc(item.id) + '">반려하고 다시 계획</button>' +
+          '<button class="btn ghost" type="button" data-act="reject-cancel" data-id="' + esc(item.id) + '">취소</button></div></div>';
+      }
+    } else if (item.status === 'approved') {
+      if (item.commit) {
+        h += '<div class="ap-rec">' + (item.commit.ok ? '✅ 코드에 반영했어요 · ' + esc(fileLabel(item.commit.repo, item.commit.path)) : '⚠️ 반영하지 못했어요 · ' + esc(clip(item.commit.error || '', 80))) + '</div>';
+      } else if (phase === 'run' || phase === 'collect') {
+        h += '<div class="ap-rec">배분 계획 승인됨 · 팀에 전달하는 중이에요</div>';
+      } else {
+        h += '<div class="ap-rec">대표님 최종 승인 완료</div>';
+      }
+    } else if (item.status === 'rejected') {
+      h += '<div class="ap-rec" style="background:#fff1f2;color:#c14160">반려함 · ' + esc(clip(item.rejectReason || '', 120)) + '</div>';
+    } else if (item.status === 'failed') {
+      h += '<div class="ap-rec" style="background:#fff1f2;color:#c14160">실패 · ' + esc(clip(item.error || '', 140)) + '</div>';
     }
     h += '</div>';
     return h;
@@ -5000,12 +5641,139 @@ var QR = (function () {
     h += '</div></section>';
     return h;
   }
+  /* ==================================================================
+     팀 작업 현황 모달 — 지금 하는 일 · 진행 로그 · 최근 보고
+     ================================================================== */
+  function activeWorkFor(teamId) {
+    var out = [], list = workFor(teamId);
+    for (var i = list.length - 1; i >= 0; i--) {
+      var w = list[i];
+      if (w.status === 'working' || w.status === 'queued' || w.status === 'waiting') out.push(w);
+      else if (w.kind === 'delegation' && w.status === 'approved') out.push(w);
+    }
+    return out;
+  }
+  function currentWorkFor(teamId) {
+    var list = activeWorkFor(teamId);
+    for (var i = 0; i < list.length; i++) {
+      var w = list[i];
+      if (w.status === 'working' || w.status === 'queued') return w;
+      if (w.kind === 'delegation' && w.status === 'approved') return w;
+    }
+    return null;
+  }
+  function progressLogHtml(item) {
+    var log = (item && (item.progressLog && item.progressLog.length ? item.progressLog : item.log)) || [];
+    if (!log.length) return '<p class="tm-empty">아직 진행 기록이 없어요. 일이 시작되면 단계마다 여기에 쌓여요.</p>';
+    var live = item.status === 'working' || item.status === 'queued';
+    var h = '<ol class="tm-log">';
+    for (var i = 0; i < log.length; i++) {
+      var last = (i === log.length - 1);
+      h += '<li' + (last && live ? ' class="now"' : '') + '><span class="t">' + esc(clockLabel(log[i].at)) + '</span><span>' + esc(log[i].text) + '</span></li>';
+    }
+    return h + '</ol>';
+  }
+  function tmRow(w, badge) {
+    var team = w.teamId === 'sec' ? secretaryTeam() : (teamById(w.teamId) || { name: w.teamId, emoji: '📄' });
+    var sub = team.name + ' · ' + whenLabel(w.updatedAt || w.at);
+    if (w.status === 'waiting') sub = team.name + ' · 결재 기다리는 보고 · ' + whenLabel(w.updatedAt || w.at);
+    var badgeCls = (w.status === 'done' || w.status === 'approved') ? ' done' : '';
+    var badgeTxt = badge || (w.status === 'waiting' ? '결재 대기' : (w.status === 'failed' ? '실패' : '완료'));
+    return '<button class="tm-row" type="button" data-act="team-modal-go" data-id="' + esc(w.id) + '">' +
+      '<span class="r-main"><b>' + esc((team.emoji ? team.emoji + ' ' : '') + (w.title || '일')) + '</b><span>' + esc(sub) + '</span></span>' +
+      '<span class="r-badge' + badgeCls + '">' + esc(badgeTxt) + '</span></button>';
+  }
+  function renderTeamModal(reset) {
+    if (!S.teamModal) return;
+    var m = document.getElementById('teamModal');
+    var body = document.getElementById('teamModalBody');
+    var title = document.getElementById('teamModalTitle');
+    if (!m || !body) return;
+    if (!S.office) { body.innerHTML = '<p class="tm-empty">사무실 기록을 여는 중이에요.</p>'; return; }
+    var isSec = S.teamModal.teamId === 'sec';
+    var team = isSec ? secretaryTeam() : (teamById(S.teamModal.teamId) || { id: S.teamModal.teamId, name: S.teamModal.teamId, emoji: '📄' });
+    var st = teamStatus(team.id);
+    var mid = teamModelId(team), sp = splitModelId(mid);
+    if (title) title.textContent = (team.emoji ? team.emoji + ' ' : '') + team.name + ' 작업 현황';
+    var keep = body.scrollTop;
+    var h = '';
+    h += '<div class="tm-top"><span class="tm-avatar">' + charSvg(team) + '<i class="em">' + esc(team.emoji || '🧩') + '</i></span>' +
+      '<span class="tm-who"><b>' + esc(team.name) + '</b><span>' + esc((PROVIDERS[sp.pid] ? PROVIDERS[sp.pid].short + ' · ' : '') + modelShort(mid)) + '</span></span>' +
+      '<span class="status ' + st + '"><i></i>' + esc(STATUS_LABEL[st] || '대기 중') + '</span></div>';
+    var cur = currentWorkFor(team.id);
+    if (cur) {
+      var startedAt = cur.startedAt || cur.at;
+      h += '<div class="tm-sec"><div class="tm-h"><span>지금 진행 중인 일</span><span class="when">' + esc(whenLabel(cur.updatedAt || cur.at)) + '</span></div>' +
+        '<div class="tm-title">' + esc(cur.title) + (cur.kind === 'delegation' ? ' <span class="badge">배분·취합</span>' : '') + '</div>' +
+        '<div class="tm-h" style="margin-top:7px;color:#8d849f">경과 <span class="tm-elapsed" data-elapsed="' + esc(startedAt) + '">' + esc(elapsedLabel(startedAt)) + '</span></div>' +
+        (cur.brief ? '<p class="tm-brief">' + esc(clip(cur.brief, 900)) + '</p>' : '') +
+        ((cur.kind === 'delegation' && cur.phase === 'run') ? pipelineLine(cur) : '') + '</div>';
+      h += '<div class="tm-sec"><div class="tm-h"><span>실시간 진행 로그</span><span class="when">' + ((cur.progressLog || []).length) + '단계</span></div>' + progressLogHtml(cur) + '</div>';
+    } else {
+      h += '<div class="tm-sec"><div class="tm-h"><span>지금 진행 중인 일</span></div><p class="tm-empty">지금은 진행 중인 일이 없어요. 이 팀에 새 일을 지시하면 진행 상황이 여기에 실시간으로 쌓여요.</p></div>';
+    }
+    var waiting = [], recent = [];
+    var all = workFor(team.id);
+    for (var k = all.length - 1; k >= 0; k--) {
+      var x = all[k];
+      if (cur && x.id === cur.id) continue;
+      if (x.status === 'waiting') waiting.push(x);
+      else if (x.status === 'done' || x.status === 'approved' || x.status === 'rejected' || x.status === 'failed') recent.push(x);
+    }
+    if (waiting.length) {
+      h += '<div class="tm-sec"><div class="tm-h"><span>결재 기다리는 보고</span><span class="when">' + waiting.length + '건</span></div><div class="tm-list">';
+      for (var a = 0; a < waiting.length && a < 6; a++) h += tmRow(waiting[a], '결재 대기');
+      h += '</div></div>';
+    }
+    if (recent.length) {
+      h += '<div class="tm-sec"><div class="tm-h"><span>최근 보고</span><span class="when">' + recent.length + '건</span></div><div class="tm-list">';
+      for (var b = 0; b < recent.length && b < 6; b++) h += tmRow(recent[b], '');
+      h += '</div></div>';
+    }
+    var later = [];
+    var actList = activeWorkFor(team.id);
+    for (var c2 = 0; c2 < actList.length; c2++) {
+      var av = actList[c2];
+      if (cur && av.id === cur.id) continue;
+      if (av.status !== 'working' && av.status !== 'queued') continue;
+      later.push(av);
+    }
+    if (later.length) {
+      h += '<div class="tm-sec"><div class="tm-h"><span>기다리는 일</span><span class="when">' + later.length + '건</span></div><div class="tm-list">';
+      for (var d2 = 0; d2 < later.length && d2 < 5; d2++) h += tmRow(later[d2], '대기');
+      h += '</div></div>';
+    }
+    h += '<div class="tm-actions"><button class="btn-s ok" type="button" data-act="team-modal-direct" data-team="' + esc(team.id) + '">' + (isSec ? '비서에게 새 일 지시' : '이 팀에 새 일 지시') + '</button>' +
+      '<button class="btn-s" type="button" data-act="team-modal-close">닫기</button></div>';
+    body.innerHTML = h;
+    body.scrollTop = reset ? 0 : keep;
+  }
+  function openTeamModal(teamId) {
+    S.teamModal = { teamId: teamId || 'cs', at: nowIso() };
+    var m = document.getElementById('teamModal');
+    if (!m) return;
+    m.hidden = false;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    renderTeamModal(true);
+  }
+  function closeTeamModal() {
+    S.teamModal = null;
+    var m = document.getElementById('teamModal');
+    if (m) m.hidden = true;
+    var sb = document.getElementById('settingsModal');
+    if (!sb || sb.hidden) {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }
+  }
   function renderAll() {
     if (S.tab) document.body.setAttribute('data-tab', S.tab);
     renderTop();
     renderRail();
     renderOffice();
     renderPanel();
+    renderTeamModal();
   }
 
   /* ==================================================================
@@ -5170,6 +5938,16 @@ var QR = (function () {
     S.rejectOpen = {};
     S.details = {};
     S.draft = { team: 'cs', title: '', text: '', material: '' };
+    S.teamModal = null;
+    S.directHint = '';
+    S.pipe = [];
+    S.pipeRunning = false;
+    S.planQueue = [];
+    S.planRunning = false;
+    var tmo = document.getElementById('teamModal');
+    if (tmo) tmo.hidden = true;
+    document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
     S.lastActivityAt = 0;
     ssDel(K_UNLOCK);
     closeSettings();
@@ -5219,6 +5997,7 @@ var QR = (function () {
   function closeSettings() {
     var m = document.getElementById('settingsModal');
     if (m) m.hidden = true;
+    if (S.teamModal) return;
     document.body.style.overflow = '';
     document.documentElement.style.overflow = '';
   }
@@ -5571,7 +6350,9 @@ var QR = (function () {
 
   document.addEventListener('change', function (e) {
     var t = e.target;
-    if (!t || t.getAttribute('data-act') !== 'team-pid') return;
+    if (!t) return;
+    if (t.id === 'directTeam') { S.draft.team = t.value; renderPanel(); return; }
+    if (t.getAttribute('data-act') !== 'team-pid') return;
     var teamId = t.getAttribute('data-team');
     var sel = document.getElementById('tm_model_' + teamId);
     if (sel) sel.innerHTML = modelChoices(t.value, '');
@@ -5584,7 +6365,10 @@ var QR = (function () {
   }, true);
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' || e.key === 'Esc') { closeSettings(); return; }
+    if (e.key === 'Escape' || e.key === 'Esc') {
+      if (S.teamModal) { closeTeamModal(); return; }
+      closeSettings(); return;
+    }
     if (e.target && e.target.id === 'directText' && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       pullDraft();
@@ -5595,6 +6379,8 @@ var QR = (function () {
   document.addEventListener('click', function (e) {
     var el = (e.target && e.target.closest) ? e.target.closest('[data-act]') : null;
     if (!el) {
+      var tm = document.getElementById('teamModal');
+      if (tm && !tm.hidden && e.target === tm) { closeTeamModal(); return; }
       var sm = document.getElementById('settingsModal');
       if (sm && !sm.hidden && e.target === sm) closeSettings();
       return;
@@ -5612,16 +6398,62 @@ var QR = (function () {
       return;
     }
     if (act === 'team-click') {
-      S.selTeam = el.getAttribute('data-team') || 'cs';
-      S.draft.team = S.selTeam;
+      var tid = el.getAttribute('data-team') || 'cs';
+      if (teamActive(tid)) { S.directHint = ''; openTeamModal(tid); return; }
+      S.selTeam = tid;
+      S.draft.team = tid;
+      S.clearDraft = true;
+      var tObj = tid === 'sec' ? secretaryTeam() : teamById(tid);
+      S.directHint = (tObj ? tObj.name : '이 팀') + '에 바로 지시할 수 있어요. 아래에 내용을 적고 [지시 보내기]를 눌러 주세요.';
       setTab('direct');
       renderAll();
       var dt = document.getElementById('directText');
       if (dt) { try { dt.focus(); } catch (err) { /* 무시 */ } }
       return;
     }
+    if (act === 'team-modal-close') { closeTeamModal(); return; }
+    if (act === 'team-modal-go') {
+      closeTeamModal();
+      setTab('approve');
+      renderAll();
+      var cardEl = document.querySelector('.ap-card[data-work="' + id + '"]');
+      if (cardEl) { try { cardEl.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err2) { /* 무시 */ } }
+      return;
+    }
+    if (act === 'team-modal-direct') {
+      var tmTeam = el.getAttribute('data-team') || 'sec';
+      closeTeamModal();
+      S.selTeam = tmTeam;
+      S.draft.team = tmTeam;
+      S.clearDraft = true;
+      S.directHint = '';
+      setTab('direct');
+      renderAll();
+      var dtm = document.getElementById('directText');
+      if (dtm) { try { dtm.focus(); } catch (err3) { /* 무시 */ } }
+      return;
+    }
+    if (act === 'sec-qc') {
+      var sq = workById(id);
+      if (!sq || sq.status !== 'waiting' || !sq.code) return;
+      sq.status = 'approved';
+      sq.approvedAt = nowIso();
+      pushLog(sq, '대표님 · QC 검수 요청');
+      qcHandoff(sq);
+      return;
+    }
+    if (act === 'sec-commit') {
+      var sc = workById(id);
+      if (!sc || sc.status !== 'waiting' || !sc.code) return;
+      sc.status = 'approved';
+      sc.approvedAt = nowIso();
+      pushLog(sc, '대표님 · 최종 승인하고 반영');
+      commitCode(sc);
+      return;
+    }
     if (act === 'fill-team') {
       S.draft.team = el.getAttribute('data-team') || 'dev';
+      S.clearDraft = true;
       setTab('direct');
       renderAll();
       return;
@@ -5651,6 +6483,17 @@ var QR = (function () {
     if (act === 'retry') {
       var fw = workById(id);
       if (!fw) return;
+      if (fw.kind === 'delegation') {
+        fw.status = 'working';
+        fw.phase = 'plan';
+        fw.delegationPlan = [];
+        fw.childIds = [];
+        pushLog(fw, '다시 맡김 · 배분 계획부터');
+        renderAll(); saveOfficeSoon(0);
+        enqueuePlan(fw.id, '');
+        toast('비서에게 다시 맡겼어요.');
+        return;
+      }
       fw.status = 'failed';
       var rw = newWork(fw.teamId, fw.title, fw.brief, fw.materialIds, fw.id);
       pushLog(rw, '다시 맡김');
@@ -5714,6 +6557,8 @@ var QR = (function () {
     }
     var gate = document.getElementById('gateScreen');
     if (gate && !gate.hidden) return;
+    var els = document.querySelectorAll('#teamModalBody [data-elapsed]');
+    for (var j = 0; j < els.length; j++) els[j].textContent = elapsedLabel(els[j].getAttribute('data-elapsed'));
     renderTabs();
     renderTop();
   }
