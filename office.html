@@ -6108,7 +6108,7 @@ var QR = (function () {
     h += '<div class="tm-top"><span class="tm-avatar">' + (isSec ? pickleSvg() : charSvg(team)) + '<i class="em">' + esc(team.emoji || '🧩') + '</i></span>' +
       '<span class="tm-who"><b>' + esc(team.name) + '</b><span>' + esc(isSec ? ('피클 · 전담 비서 · ' + (DEFAULT_SECRETARY.role || '')) : ((PROVIDERS[sp.pid] ? PROVIDERS[sp.pid].short + ' · ' : '') + modelShort(mid))) + '</span></span>' +
       '<span class="status ' + st + '"><i></i>' + esc(STATUS_LABEL[st] || '대기 중') + '</span></div>' +
-      (isSec ? '<p class="tm-note" style="background:#f2f9ee;color:#4d7a3c;border:1px solid #dcecd2">' + esc(DEFAULT_SECRETARY.desc) + ' · 4F~2F 부서 일은 아래 모델로 백그라운드에서 돌아가요.</p>' : '');
+      (isSec ? '<p class="tm-note" style="background:#f2f9ee;color:#4d7a3c;border:1px solid #dcecd2">' + esc(DEFAULT_SECRETARY.desc) + ' · 4F~2F 부서 일은 팀별 모델로 백그라운드에서 돌아가요.</p>' : '');
     var cur = currentWorkFor(team.id);
     if (cur) {
       var startedAt = cur.startedAt || cur.at;
