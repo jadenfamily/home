@@ -3,6 +3,8 @@
 .env.*
 *.key
 *secret*
+# 비서실 모듈은 이름에 'secret'이 들어가지만 화면 코드예요 (비밀값 아님)
+!office/js/secretary.js
 .DS_Store
 node_modules/
 __pycache__/
