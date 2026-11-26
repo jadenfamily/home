@@ -5286,6 +5286,8 @@ var QR = (function () {
     var sec = workById(secId);
     if (!sec) return;
     if (!sec.delegationPlan || !sec.delegationPlan.length) { toast('배분 계획이 비어 있어요.'); return; }
+    /* 피클이 계획만 올리고 표시를 바꾸지 않았어도, 계획이 있으면 승인할 수 있게 해요 */
+    if (isPicoWork(sec) && sec.picoStatus === 'pending') sec.picoStatus = 'planned';
     sec.status = 'approved';
     sec.approvedAt = nowIso();
     sec.phase = 'run';
@@ -5676,6 +5678,7 @@ var QR = (function () {
       item.approvedAt = nowIso();
       item.nextDone = true;
       item.nextAt = nowIso();
+      if (isPicoWork(item) && item.picoStatus === 'report') item.picoStatus = 'done';
       pushLog(item, '대표님 최종 승인');
       renderAll(); saveOfficeSoon(0);
       toast(item.code ? '최종 취합 보고를 승인했어요. 코드 수정안은 아직 반영 전이에요 — QC 검수나 바로 반영을 골라 주세요.' : '최종 취합 보고를 승인했어요.');
