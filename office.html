@@ -192,6 +192,10 @@
   }
   .btn-s.ok{ background:linear-gradient(150deg,#7c5cfc,#5a7bff); color:#fff; box-shadow:0 4px 10px rgba(92,72,200,.22); }
   .btn-s.warn{ background:#fff1f2; color:#c14160; }
+  .btn-s.danger{ background:#fff1f2; color:#c14160; }
+  .btn-s.danger.mini{ padding:5px 7px; font-size:10.5px; }
+  .status.pickle{ color:#4d7a3c; background:#f1f9ea; }
+  .status.pickle i{ background:#6aa84f; }
   .empty{ font-size:11.5px; font-weight:800; color:#a9a1b8; padding:7px 2px; }
   .lobby-row{ display:flex; align-items:center; gap:9px; }
   .lobby-row .lz{ font-size:11px; font-weight:800; color:#5d7fa0; }
@@ -224,6 +228,7 @@
   .btn[disabled]{ opacity:.55; box-shadow:none; }
   .btn.ghost{ background:#f7f3ff; color:#5d4f96; box-shadow:none; }
   .btn.warn{ background:#fff1f2; color:#c14160; box-shadow:none; }
+  .btn.danger{ background:#e5484d; color:#fff; box-shadow:0 6px 14px rgba(200,60,70,.22); }
   .btn.clay{ background:linear-gradient(150deg,#e08a49,#c96f2c); box-shadow:0 8px 18px rgba(190,110,50,.22); }
   .btn-line{ display:flex; gap:7px; flex-wrap:wrap; }
   .btn-line .btn{ width:auto; flex:1 1 110px; }
@@ -359,6 +364,9 @@
   .sec .gtitle{ display:flex; align-items:center; gap:6px; font-size:11px; font-weight:900; color:#8d849f; margin:7px 0 5px; }
   .sec .gtitle .k{ margin-left:auto; color:#a49bb6; }
   .mrow{ display:flex; align-items:center; gap:7px; background:#fbfaf7; border:1px solid #f2ece2; border-radius:11px; padding:7px 8px; margin-bottom:5px; }
+  .mrow[data-act]{ cursor:pointer; }
+  .mrow[data-act]:hover{ background:#f7f4ff; border-color:#e6dcff; }
+  .mrow:focus-visible{ outline:2px solid #b9a8ff; outline-offset:1px; }
   .mrow.on{ background:#f7f4ff; border-color:#e6dcff; }
   .mrow .mi{ min-width:0; flex:1 1 auto; }
   .mrow .mi b{ display:block; font-size:11.5px; font-weight:900; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -541,6 +549,16 @@
   </div>
 </div>
 
+<div class="modal" id="workModal" hidden role="dialog" aria-modal="true" aria-labelledby="workModalTitle">
+  <div class="modal-card team-modal-card">
+    <div class="modal-head">
+      <h2 id="workModalTitle">업무 자세히 보기</h2>
+      <button class="modal-close" type="button" data-act="work-modal-close" aria-label="닫기">✕</button>
+    </div>
+    <div class="modal-body" id="workModalBody"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -621,7 +639,7 @@
     draft: { team: 'cs', title: '', text: '', material: '' },
     rejectOpen: {}, details: {},
     busy: {}, queue: [], running: false,
-    teamModal: null, directHint: '',
+    teamModal: null, workModal: null, directHint: '',
     pipe: [], pipeRunning: false, planQueue: [], planRunning: false,
     saveTimer: null, saveChain: Promise.resolve(), saveState: 'idle',
     lastActivityAt: 0, settingsMsg: '',
@@ -3139,8 +3157,9 @@ var QR = (function () {
       if (t.name === 'code_edit') {
         t.title = '코드 수정안 만들기';
         t.desc = '코드를 고쳐 수정안을 만들어요. 실제 반영은 대표님 승인과 QC 검수 뒤에만 일어나요. ' +
+          '아이 화면(kids-dashboard)은 index.html 셸 + js/*.js 모듈 구조라 path에는 고칠 모듈 파일(예: js/ui.js)을 적어요. ' +
           '큰 파일은 content로 통째로 쓰지 말고 edits(찾아 바꾸기)로 작게 고치세요.';
-        t.argsHint = '{"repo":"kids-dashboard","path":"index.html","edits":[{"old_string":"정확히 같은 글자","new_string":"새 글자"}],"summary":"무엇을 왜 바꾸는지"}';
+        t.argsHint = '{"repo":"kids-dashboard","path":"js/ui.js","edits":[{"old_string":"정확히 같은 글자","new_string":"새 글자"}],"summary":"무엇을 왜 바꾸는지"}';
       }
       if (t.name === 'family_save') { t.desc = '가족 데이터를 저장해요(사무실에서는 쓰지 않고 읽기만 해요).'; }
     }
@@ -3930,7 +3949,11 @@ var QR = (function () {
   function finishedList() {
     var out = [], list = (S.office && S.office.work) || [];
     for (var i = list.length - 1; i >= 0 && out.length < 4; i--) {
-      if (list[i].status === 'approved' && list[i].nextDone) out.push(list[i]);
+      var w = list[i];
+      if (w.status !== 'approved' || !w.nextDone) continue;
+      /* 코드 수정·실제 결과물이 필요한 일은 실제 반영(커밋)까지 가야 '마무리'예요 */
+      if (!delivered(w)) continue;
+      out.push(w);
     }
     return out;
   }
@@ -3943,6 +3966,64 @@ var QR = (function () {
       out.push(list[i]);
     }
     return out;
+  }
+
+  /* ---------- 1F 비서실 = 전담 비서 피클 (외부 AI 일꾼을 부르지 않아요) ---------- */
+  function isPicoWork(w) { return !!(w && w.secOwner === 'pico'); }
+  /* 피클이 아직 손대기 전(확인 대기)이거나, 피클 보고를 기다리는 중 */
+  function picoPending(w) { return isPicoWork(w) && (w.picoStatus === 'pending' || w.picoStatus === 'report' || w.picoStatus === 'collect'); }
+  function picoLabel(w) {
+    if (!isPicoWork(w)) return '';
+    if (w.picoStatus === 'pending') return '비서 피클 확인 대기';
+    if (w.picoStatus === 'report') return '피클 최종 취합 보고 대기';
+    if (w.picoStatus === 'working') return '피클 작업 중';
+    if (w.picoStatus === 'done') return '피클 보고 완료';
+    return '피클 담당';
+  }
+  function hasPicoPending() {
+    var list = (S.office && S.office.work) || [];
+    for (var i = 0; i < list.length; i++) if (picoPending(list[i])) return true;
+    return false;
+  }
+  function picoPendingFor(teamId) {
+    var list = workFor(teamId), out = [];
+    for (var i = 0; i < list.length; i++) if (picoPending(list[i])) out.push(list[i]);
+    return out;
+  }
+  /* 코드 수정이 필요한 일인지 — 계획에 개발팀이 있거나, 수정안·재요청이 붙었거나, 지시에 코드·화면 이야기가 있을 때 */
+  var CODE_HINT_RE = /(코드|소스|수정안|js\s*\/|index\.html|style\.css|버튼|화면|기능|배포|커밋)/;
+  function asksCode(item) {
+    if (!item) return false;
+    if (item.code) return true;
+    if (item.codeWanted || item.codeRedoId) return true;
+    var plan = item.delegationPlan || [];
+    for (var i = 0; i < plan.length; i++) if (plan[i] && plan[i].deptId === 'dev') return true;
+    var kids = item.childIds ? secChildList(item) : [];
+    for (var k = 0; k < kids.length; k++) if (kids[k] && (kids[k].teamId === 'dev' || kids[k].code)) return true;
+    return false;
+  }
+  function codeIntent(item) {
+    if (!item) return false;
+    if (asksCode(item)) return true;
+    return CODE_HINT_RE.test(String(item.title || '') + ' ' + String(item.brief || ''));
+  }
+  /* 목표한 결과물이 실제로 끝났는지 — 코드 수정은 실제 반영(commit.ok)까지 가야 완료예요 */
+  function delivered(w) {
+    if (!w) return false;
+    if (w.status === 'failed' || w.status === 'rejected' || w.status === 'dismissed') return false;
+    if (w.code || asksCode(w)) return !!(w.commit && w.commit.ok === true);
+    return true;
+  }
+  function workStateLabel(w) {
+    if (!w) return '';
+    if (w.commit) return w.commit.ok ? '코드 반영됨' : '반영 실패';
+    if (isPicoWork(w)) return picoLabel(w);
+    if (w.status === 'waiting') return '결재 대기';
+    if (w.status === 'rejected') return '반려';
+    if (w.status === 'failed') return w.code ? '반영 실패' : '실패';
+    if (w.status === 'approved') return w.nextDone ? '완료' : '승인됨 · 다음 단계';
+    if (w.status === 'done') return '완료';
+    return '진행 중';
   }
   function newWork(teamId, title, brief, materialIds, parentId) {
     S.office.seq = (Number(S.office.seq) || 0) + 1;
@@ -4002,7 +4083,7 @@ var QR = (function () {
   }
   /* 화면에 보여 줄 때는 저장소·파일 경로 대신 가족이 아는 이름으로 적어요 */
   var REPO_LABEL = { 'home': '우리 집 화면', 'kids-dashboard': '아이 화면', 'fridge-dashboard': '냉파 화면', 'ledger-dashboard': '가계부 화면' };
-  var FILE_LABEL = { 'index.html': '기본 화면', 'office.html': 'AI 사무실 화면', 'chat.html': '옛 챗 화면' };
+  var FILE_LABEL = { 'index.html': '기본 화면', 'office.html': 'AI 사무실 화면', 'chat.html': '옛 챗 화면', 'style.css': '스타일' };
   function fileLabel(repo, path) {
     var base = String(path || '').split('/').pop();
     return (REPO_LABEL[String(repo || '')] || '화면') + ' · ' + (FILE_LABEL[base] || base || '코드');
@@ -4096,6 +4177,8 @@ var QR = (function () {
   }
   function isLiveWork(w) {
     if (!w) return false;
+    /* 피클이 직접 맡은 일(확인·취합 보고 대기)은 외부 일꾼·자동 중단 대상이 아니에요 */
+    if (picoPending(w)) return false;
     if (w.status === 'working' || w.status === 'queued') return true;
     if (w.kind === 'delegation' && w.status === 'approved' && (w.phase === 'run' || w.phase === 'collect')) return true;
     return false;
@@ -4130,6 +4213,8 @@ var QR = (function () {
   /* 일을 시작해요 — 백그라운드 일꾼에게 맡기고, 안 되면 이 화면에서 실행해요 */
   async function kick(item, mode) {
     if (!item || !S.office) return false;
+    /* 1F 비서실은 피클이 직접 맡아요 — 피클이 처리할 차례면 외부 일꾼을 부르지 않아요 */
+    if (picoPending(item)) { renderAll(); saveOfficeSoon(0); return false; }
     if (S.bg.kick[item.id]) return false;
     S.bg.kick[item.id] = true;
     if (mode === 'run') { item.status = 'approved'; item.phase = 'run'; }
@@ -4186,6 +4271,7 @@ var QR = (function () {
 
   /* 진행 상황 받아오기 — 보고·진행 로그가 화면에 바로 보이게 */
   function startPolling() {
+    S.bg.liveAt = Date.now();
     if (S.bg.pollTimer) return;
     S.bg.pollTimer = window.setInterval(pollOffice, BG_POLL_MS);
   }
@@ -4197,9 +4283,10 @@ var QR = (function () {
   async function pollOffice() {
     if (!S.unlocked || !S.office || S.officeLocked || !S.chatKey || !S.me) { stopPolling(); return; }
     var live = hasLiveWork();
-    if (live) S.bg.liveAt = Date.now();
+    var pico = hasPicoPending();
+    if (live || pico) S.bg.liveAt = Date.now();
     /* 일이 끝난 뒤에도 3분은 더 지켜봐요 (다른 기기·일꾼의 마무리 기록을 받아오려고) */
-    if (!live && Date.now() - (S.bg.liveAt || 0) > 180000) { stopPolling(); renderAll(); return; }
+    if (!live && !pico && Date.now() - (S.bg.liveAt || 0) > 180000) { stopPolling(); renderAll(); return; }
     /* 아직 올리지 않은 내 변경이 있으면 이번 차례는 건너뛰어요 (덮어쓰지 않게) */
     if (S.saveState === 'saving') return;
     if (JSON.stringify(S.office) !== S.officeState) return;
@@ -4256,6 +4343,15 @@ var QR = (function () {
       '마지막 기록 · ' + (lastLine ? (lastLine + (lastAt ? ' (' + whenLabel(lastAt) + ')' : '')) : '기록 없음'),
       auto ? '3분 넘게 새 소식이 없어 비서가 자동으로 멈추고 정리했어요.' : '대표님이 직접 멈추셨어요.'
     ];
+    if (src.autoRetryLog && src.autoRetryLog.length) {
+      points.push('자동 재처리 ' + src.autoRetryLog.length + '번 시도 · ' + clip(src.autoRetryLog[src.autoRetryLog.length - 1].reason || '', 100));
+    }
+    var tryNote = '';
+    if (src.autoRetryLog && src.autoRetryLog.length) {
+      var tl = [];
+      for (var ti = 0; ti < src.autoRetryLog.length; ti++) tl.push((ti + 1) + ') ' + clip(src.autoRetryLog[ti].reason || '', 160));
+      tryNote = '\n\n[자동 재처리 시도]\n' + tl.join('\n');
+    }
     if (open) {
       open.secretary = open.secretary || {};
       open.secretary.summary = reason;
@@ -4273,7 +4369,7 @@ var QR = (function () {
     w.auto = !!auto;
     w.report = {
       summary: reason,
-      detail: '원래 일: ' + (src.title || '') + '\n원인: ' + reason + '\n마지막 기록: ' + (lastLine || '기록 없음'),
+      detail: '원래 일: ' + (src.title || '') + '\n원인: ' + reason + '\n마지막 기록: ' + (lastLine || '기록 없음') + tryNote,
       next: [], at: nowIso()
     };
     w.secretary = { summary: reason, points: points, recommend: '다시 실행하면 멈춘 자리부터 이어서 해요.', next: [], at: nowIso() };
@@ -4324,9 +4420,24 @@ var QR = (function () {
         S.bg.watch[w.id] = 1;
         if (jobStalled(w) && !S.bg.stopping[w.id]) {
           S.bg.stopping[w.id] = 1;
-          stopWorkCore(w, '응답이 3분 넘게 없어 자동으로 멈췄어요.', true);
+          /* 바로 멈추고 보고하지 않고, 한 번은 자동으로 이어서 실행해요 */
+          if ((Number(w.stallRetries) || 0) < 1) {
+            w.stallRetries = (Number(w.stallRetries) || 0) + 1;
+            w.tries = (Number(w.tries) || 0) + 1;
+            w.autoRetryLog = w.autoRetryLog || [];
+            w.autoRetryLog.push({ at: nowIso(), reason: '응답이 3분 넘게 없었어요 · 자동으로 다시 실행', try: w.tries });
+            pushLog(w, '자동 재처리 ' + w.tries + '/' + AUTO_RETRY_MAX + ' · 응답이 3분 넘게 없어 다시 실행');
+            renderAll(); saveOfficeSoon(0);
+            window.setTimeout(function () {
+              var live2 = workById(w.id);
+              if (!live2) return;
+              if (jobStalled(live2)) rerunWork(w.id);
+            }, 2500);
+          } else {
+            stopWorkCore(w, '응답이 3분 넘게 없어 자동으로 멈췄어요.', true);
+            toast('응답이 없어 작업을 자동으로 멈추고, 비서가 보고를 올렸어요.');
+          }
           delete S.bg.stopping[w.id];
-          toast('응답이 없어 작업을 자동으로 멈추고, 비서가 보고를 올렸어요.');
         }
       } else if (S.bg.watch[w.id]) {
         delete S.bg.watch[w.id];
@@ -4345,7 +4456,9 @@ var QR = (function () {
     if (open) closeNotice(open.id, true);
     w.cancelRequested = false;
     w.error = '';
+    w.autoStalled = 0;
     delete S.bg.notified[w.id];
+    attachPrior(w, w, '대표님이 다시 실행');
     if (w.kind === 'delegation') {
       var phase = w.phase || 'plan';
       if (phase === 'plan') {
@@ -4374,6 +4487,64 @@ var QR = (function () {
     pushLog(w, '다시 실행');
     renderAll(); saveOfficeSoon(0);
     kick(w, 'item');
+  }
+
+  /* ---------- 업무 지우기 · 반려 후 삭제 · 코드 다시 요청 ---------- */
+  function deleteWork(id) {
+    if (!S.office || !id) return false;
+    var victim = workById(id);
+    if (!victim) return false;
+    var drop = [id];
+    var kids = (victim.childIds || []).slice();
+    for (var i = 0; i < kids.length; i++) if (kids[i]) drop.push(kids[i]);
+    var list = S.office.work || [], out = [];
+    for (var k = 0; k < list.length; k++) {
+      var x = list[k];
+      if (!x) continue;
+      if (drop.indexOf(x.id) >= 0) continue;
+      /* 이 업무의 문제 보고·하위 일 보고도 같이 정리해요 */
+      if (x.kind === 'notice' && drop.indexOf(x.noticeOf) >= 0) continue;
+      if (x.parentId && drop.indexOf(x.parentId) >= 0) continue;
+      out.push(x);
+    }
+    S.office.work = out;
+    if (S.workModal === id) closeWorkDetail(true);
+    renderAll(); saveOfficeSoon(0);
+    return true;
+  }
+  function askDeleteWork(id) {
+    var w = workById(id);
+    if (!w) return;
+    if (!window.confirm('이 업무를 목록에서 지울까요?\n지운 업무는 되돌릴 수 없어요.')) return;
+    deleteWork(id);
+    toast('업무를 목록에서 지웠어요.');
+  }
+  function rejectDelete(id) {
+    var w = workById(id);
+    if (!w) return;
+    var reason = String(fieldVal('rej_' + id) || '').trim();
+    if (!window.confirm('반려하고 이 업무를 목록에서 지울까요?' + (reason ? '\n반려 사유: ' + reason : ''))) return;
+    w.status = 'rejected';
+    w.rejectedAt = nowIso();
+    w.rejectReason = clip(reason || '대표님이 반려하고 정리했어요.', 600);
+    pushLog(w, '대표님 반려 후 삭제' + (reason ? ' · ' + clip(reason, 100) : ''));
+    deleteWork(id);
+    toast('반려하고 목록에서 지웠어요.');
+  }
+  function secCodeRetry(id) {
+    var sec = workById(id);
+    if (!sec) return;
+    if (sec.codeRedoId && workById(sec.codeRedoId) && isLiveWork(workById(sec.codeRedoId))) {
+      toast('이미 개발팀에 코드 수정을 다시 요청했어요. 결과를 기다려 주세요.');
+      return;
+    }
+    sec.codeWanted = true;
+    sec.codeMissing = false;
+    var w = newCodeRedoWork(sec, '대표님이 개발팀에 코드 작성 다시 요청');
+    pushLog(sec, '대표님 · [개발팀에 다시 코드 작성 요청]');
+    renderAll(); saveOfficeSoon(0);
+    kick(w, 'item');
+    toast('개발팀에 실제 코드 수정안을 다시 요청했어요.');
   }
 
   /* ---------- CS 접수함 (2단계: 4개 대시보드 챗봇 버튼이 여기에 쌓아요) ---------- */
@@ -4497,6 +4668,14 @@ var QR = (function () {
   }
 
   /* ---------- 팀 지시문 ---------- */
+  var MODULE_RULES = [
+    '[AI 사무실 공통 작업 규칙 — 무엇보다 먼저 지킨다]',
+    '1. 작업 전 설명·컨펌: 바로 적용하지 않는다. 계획·수정안을 먼저 올려 대표님 승인을 받은 뒤에만 실제 코드에 반영한다.',
+    '2. 시안·요청 1:1 반영: 화면·UI·캐릭터 변경은 확정된 시안과 요청 그대로 실제 화면에 빠짐없이 반영한다. 임의로 바꾸지 않는다.',
+    '3. 모듈 분리·추후 수정 가능: 모든 코드는 기능별 모듈(js/*.js, css/*.css)로 분리해 유지하고 한 파일에 몰아넣지 않는다. 새로 추가한 항목·기능도 사용자가 나중에 직접 수정·추가·삭제할 수 있게 만든다.',
+    '4. 내부 기술 문구 비노출: 가족이 보는 화면에는 GitHub, localStorage, 저장소 경로 같은 내부 개발·기술 용어를 절대 노출하지 않는다.',
+    '5. 완전 완료·재처리: 중간 이슈가 나면 먼저 자동 재처리(재시도·다시 요청)까지 시도하고 그래도 안 될 때만 보고한다. 실제 코드 반영과 검증이 끝났을 때만 완료로 처리한다.'
+  ];
   function officeFacts() {
     var d = new Date();
     var lines = [];
@@ -4506,12 +4685,16 @@ var QR = (function () {
     lines.push('');
     lines.push('[우리 집 화면]');
     lines.push('- 우리 집(홈): home — 대문 index.html, AI 사무실 office.html');
-    lines.push('- 아이: kids-dashboard/index.html · 냉장고 파먹기: fridge-dashboard/index.html · 가계부: ledger-dashboard/index.html');
+    lines.push('- 아이: kids-dashboard — index.html(약 17KB 셸) + js/*.js 모듈(ui·events·routines·settings·sync·core·missions·myroom·pets·shop·stickers·records·avatar·boot) + css/style.css');
+    lines.push('- 냉장고 파먹기: fridge-dashboard/index.html · 가계부: ledger-dashboard/index.html');
+    lines.push('- 아이 화면은 index.html에 화면 뼈대만 있고, 실제 기능·문구·이벤트는 js/*.js 모듈에 나뉘어 있어요. 고칠 때는 해당 모듈 파일을 찾아 고칩니다.');
     lines.push('- 가족 데이터는 비공개 보관함(kids-dashboard-data)에 있어요. 데이터는 family_data 도구로 읽어요.');
     return lines.join('\n');
   }
   function buildTeamSystem(team) {
     var lines = [];
+    for (var mi = 0; mi < MODULE_RULES.length; mi++) lines.push(MODULE_RULES[mi]);
+    lines.push('');
     lines.push('너는 jadenfamily 가족의 AI 사무실에서 일하는 "' + team.name + '" 팀의 직원이다.');
     lines.push('팀 역할: ' + (team.desc || ''));
     lines.push('한국어로 일한다. 실제로 쓸 수 있는 결과를 만들고, 모르는 것은 확인한 뒤에 쓴다.');
@@ -4537,10 +4720,11 @@ var QR = (function () {
     lines.push('');
     if (team.id === 'dev') {
       lines.push('[개발팀으로 일하는 법]');
-      lines.push('- 고칠 곳을 찾을 때: search_code(path 꼭 적기) → read_code_slice로 앞뒤 80~200줄 확인 → code_edit의 edits(찾아 바꾸기)로 작게 수정.');
+      lines.push('- 아이 화면(kids-dashboard)은 index.html 셸 + js/*.js 모듈 구조예요. 화면 그리기는 js/ui.js, 이벤트는 js/events.js, 루틴은 js/routines.js, 설정은 js/settings.js, 저장·동기화는 js/sync.js, 공통 상태·도우미는 js/core.js 에 있어요. index.html에는 뼈대만 있으니 path에는 고칠 모듈 파일(예: js/ui.js)을 적습니다.');
+      lines.push('- 고칠 곳을 찾을 때: code_list로 파일 이름 확인 → search_code(path 꼭 적기) → read_code_slice로 앞뒤 80~200줄 확인 → code_edit의 edits(찾아 바꾸기)로 작게 수정.');
       lines.push('- "function"·"div" 같은 흔한 낱말로 넓게 찾지 않는다. 고칠 대상의 이름을 그대로 넣어 찾는다.');
       lines.push('- old_string은 파일 글자와 같게 쓴다. 못 찾으면 오류에 "가장 비슷한 줄"과 앞뒤 2줄이 나오니 그대로 다시 쓴다.');
-      lines.push('- 아주 큰 화면 파일은 content로 통째로 쓰지 않는다.');
+      lines.push('- 아주 큰 모듈은 content로 통째로 쓰지 않는다. edits(찾아 바꾸기)나 range로 필요한 부분만 고친다.');
       lines.push('');
     }
     if (team.id === 'qc') {
@@ -4613,6 +4797,10 @@ var QR = (function () {
       lines.push('[이미 만든 수정안]');
       lines.push(item.code.repo + '/' + item.code.path + ' — ' + clip(item.code.patchNote || '', 300));
       if (item.code.diffText) lines.push(clip(item.code.diffText, 4000));
+    }
+    if (item.priorContext) {
+      lines.push('');
+      lines.push(String(item.priorContext).slice(0, 5000));
     }
     lines.push('');
     lines.push('이 일을 맡아서 처리하고, 마지막에 보고 형식(```json)으로 답해 주세요.');
@@ -4798,6 +4986,8 @@ var QR = (function () {
   /* ---------- 비서 ---------- */
   function buildSecretarySystem() {
     var lines = [];
+    for (var mi = 0; mi < MODULE_RULES.length; mi++) lines.push(MODULE_RULES[mi]);
+    lines.push('');
     lines.push('너는 jadenfamily 가족의 AI 사무실에서 일하는 "비서"다.');
     lines.push('각 팀의 보고를 대표님이 3초에 판단할 수 있게 정리해 대표실 결재함으로 올린다.');
     lines.push(officeFacts());
@@ -4865,6 +5055,8 @@ var QR = (function () {
      ================================================================== */
   function secretaryPlanSystem() {
     var lines = [];
+    for (var mk = 0; mk < MODULE_RULES.length; mk++) lines.push(MODULE_RULES[mk]);
+    lines.push('');
     lines.push('너는 jadenfamily 가족의 AI 사무실에서 일하는 "비서"다.');
     lines.push('대표님이 비서에게 일을 맡기면, 어떤 팀에게 어떤 순서로 나눠 맡길지 "배분 계획"을 세운다. 아직 일을 실행하지 않는다.');
     lines.push(officeFacts());
@@ -4968,20 +5160,56 @@ var QR = (function () {
     }
     return out.join(' → ');
   }
+  /* 재시도·반려·재요청으로 다시 시작할 때 직전 실행의 기록·중간 보고·수정안 요약을 함께 넘겨요 */
+  function runContextText(w) {
+    if (!w) return '';
+    var log = (w.progressLog && w.progressLog.length) ? w.progressLog : (w.log || []);
+    var tail = log.slice(-12);
+    var lines = [];
+    lines.push('[직전 실행 기록 — 이어서 처리하고, 이미 해 본 시도를 그대로 반복하지 마세요]');
+    lines.push('- 상태: ' + workStateLabel(w) + (w.error ? ' · ' + clip(w.error, 200) : '') + (w.tries ? ' · 시도 ' + w.tries + '번' : ''));
+    if (tail.length) {
+      lines.push('- 진행 기록(최근 ' + tail.length + '줄):');
+      for (var i = 0; i < tail.length; i++) lines.push('  · ' + clip(tail[i].text || '', 160));
+    }
+    var rep = w.report || {};
+    if (rep.summary) lines.push('- 중간 보고 요약: ' + clip(rep.summary, 500));
+    if (rep.detail) lines.push('- 중간 보고 상세: ' + clip(rep.detail, 1500));
+    if (w.secretary && w.secretary.summary) lines.push('- 비서 요약: ' + clip(w.secretary.summary, 400));
+    if (w.code) lines.push('- 이미 만든 수정안: ' + w.code.repo + '/' + w.code.path + ' · ' + clip(w.code.patchNote || '', 300) + ' (아직 반영 전)');
+    if (w.rejectReason) lines.push('- 대표님 반려 사유: ' + clip(w.rejectReason, 400));
+    if (w.autoRetryLog && w.autoRetryLog.length) {
+      lines.push('- 지금까지 자동 재처리: ' + w.autoRetryLog.length + '번');
+      for (var k = 0; k < w.autoRetryLog.length && k < 4; k++) lines.push('  · ' + clip(w.autoRetryLog[k].reason || '', 160));
+    }
+    return lines.join('\n');
+  }
+  function attachPrior(w, src, why) {
+    if (!w || !src) return w;
+    var text = runContextText(src);
+    if (why) text = '[이번에 다시 맡긴 이유] ' + why + '\n' + text;
+    w.priorContext = clip(text, 5000);
+    return w;
+  }
+
   function startSecretaryDirective(d, opts) {
     if (!S.office) return null;
     var text = String(d.text || '').trim();
-    if (!text) { toast('비서에게 맡길 일을 적어 주세요.'); return null; }
-    var team = secretaryTeam();
-    var id = teamModelId(team), sp = splitModelId(id);
-    if (!hasKey(sp.pid)) { toast('⚙️ 설정에서 ' + (PROVIDERS[sp.pid] ? PROVIDERS[sp.pid].label : 'AI') + ' 키를 먼저 넣어 주세요.'); return null; }
+    if (!text) { toast('비서 피클에게 맡길 일을 적어 주세요.'); return null; }
     var title = String(d.title || '').trim() || clip(firstLines(text, 1), 36) || '새 일';
     var w = newWork('sec', title, text, d.material ? [d.material] : []);
     w.kind = 'delegation';
     w.phase = 'plan';
     w.delegationPlan = [];
     w.childIds = [];
+    /* 1F 비서실은 피클이 직접 맡아요 — 외부 AI 일꾼을 부르지 않고, 피클이 확인할 때까지 기다려요 */
+    w.secOwner = 'pico';
+    w.picoStatus = 'pending';
+    w.picoRequestedAt = nowIso();
+    w.picoSeenAt = '';
+    w.picoSource = String(d.picoSource || (d.sources ? 'inbox' : 'direct'));
     pushLog(w, '대표님 지시');
+    pushLog(w, '비서 피클 확인 대기 · 피클이 직접 확인해 배분 계획을 올려요');
     S.draft = { team: 'sec', title: '', text: '', material: '' };
     S.clearDraft = true;
     S.directHint = '';
@@ -4990,8 +5218,8 @@ var QR = (function () {
     var mt = document.getElementById('directMaterial'); if (mt) mt.value = '';
     if (!opts || !opts.keepTab) S.tab = 'office';
     renderAll(); saveOfficeSoon(0);
-    toast('비서에게 지시했어요. 어떤 팀에 어떤 순서로 맡길지 배분 계획을 세워 결재함에 올려요.');
-    kick(w, 'plan');
+    startPolling();
+    toast('피클에게 넘겼어요. 피클이 확인해 배분 계획을 올리면 결재함에서 승인할 수 있어요.');
     return w;
   }
   function enqueuePlan(workId, note) {
@@ -5011,6 +5239,7 @@ var QR = (function () {
   async function runPlan(workId, note) {
     var item = workById(workId);
     if (!item) return;
+    if (isPicoWork(item)) return;   /* 피클 담당은 외부 모델로 계획을 세우지 않아요 */
     item.status = 'working';
     item.phase = 'plan';
     item.updatedAt = nowIso();
@@ -5038,10 +5267,15 @@ var QR = (function () {
       pushLog(item, '비서 배분 계획 → 대표님 결재 대기');
       toast('비서가 배분 계획을 올렸어요. 대표실 결재함에서 승인해 주세요.');
     } catch (e) {
+      var pmsg = String(e && e.message ? e.message : e);
+      /* 바로 실패 보고를 올리지 않고, 직전 기록을 안고 한 번 더 자동으로 시도해요 */
+      if (autoRetry(item, pmsg, 'plan')) return;
       item.status = 'failed';
-      item.error = String(e && e.message ? e.message : e);
-      pushLog(item, '실패 · ' + clip(item.error, 120));
-      toast('배분 계획을 세우지 못했어요: ' + clip(item.error, 90));
+      item.error = pmsg;
+      item.report = item.report || { summary: '배분 계획을 세우지 못했어요.', detail: pmsg, next: [], at: nowIso() };
+      pushLog(item, '실패 · ' + clip(pmsg, 120));
+      makeNotice(item, '자동 재처리 ' + (Number(item.tries) || 0) + '번까지 했지만 배분 계획을 세우지 못했어요 · ' + clip(pmsg, 120), true);
+      toast('배분 계획을 세우지 못했어요: ' + clip(pmsg, 90));
     } finally {
       delete S.busy[item.id];
       item.updatedAt = nowIso();
@@ -5101,12 +5335,14 @@ var QR = (function () {
   async function runPipeline(secId) {
     var sec = workById(secId);
     if (!sec) return;
+    if (picoPending(sec)) return;
     S.busy['pipe_' + secId] = { at: Date.now() };
     try {
       var ids = (sec.childIds || []).slice();
       for (var i = 0; i < ids.length; i++) {
         var child = workById(ids[i]);
         if (!child) continue;
+        if (child.status === 'done') continue;
         var prior = [];
         for (var k = 0; k < i; k++) {
           var pc = workById(ids[k]);
@@ -5122,20 +5358,7 @@ var QR = (function () {
         var tname = (teamById(child.teamId) || { name: child.teamId }).name;
         pushLog(sec, tname + '에 일을 전달 (' + (i + 1) + '/' + ids.length + ')');
         renderAll(); saveOfficeSoon(0);
-        try {
-          child.report = await runTeamAgent(child, teamById(child.teamId) || { id: child.teamId, name: child.teamId, desc: '' });
-          child.status = 'done';
-          child.doneAt = nowIso();
-          pushLog(child, '보고 도착');
-          pushLog(sec, tname + ' 결과 도착');
-          if (child.code) pushLog(sec, '수정안 도착 · ' + fileLabel(child.code.repo, child.code.path) + ' (아직 반영 전)');
-        } catch (e) {
-          child.status = 'failed';
-          child.error = String(e && e.message ? e.message : e);
-          child.report = child.report || { summary: '작업을 마치지 못했어요.', detail: child.error, next: [], at: nowIso() };
-          pushLog(child, '실패 · ' + clip(child.error, 120));
-          pushLog(sec, tname + ' 실패 · ' + clip(child.error, 90));
-        }
+        await runChildSafe(child, sec, tname);
         delete S.busy[child.id];
         child.updatedAt = nowIso();
         sec.updatedAt = nowIso();
@@ -5144,10 +5367,33 @@ var QR = (function () {
       sec.phase = 'collect';
       pushLog(sec, '비서 취합 보고 작성 중');
       renderAll(); saveOfficeSoon(0);
+      /* 하위 개발팀이 만든 수정안을 비서 일에 먼저 붙여요 */
+      if (!sec.code) sec.code = pickChildCode(sec);
+      /* 코드 수정이 필요한 일인데 수정안이 비어 있으면, 실패로 올리기 전에 개발팀에 한 번 더 자동 요청해요 */
+      if (!sec.code && codeIntent(sec) && !sec.codeRedoId) {
+        sec.codeWanted = true;
+        await autoCodeRedo(sec);
+      }
+      if (!sec.code && codeIntent(sec)) {
+        sec.codeMissing = true;
+        pushLog(sec, '코드 수정안이 끝까지 만들어지지 않음 · 결재함에서 다시 요청하거나 반려 후 삭제를 골라 주세요');
+      }
+      /* 1F 비서실이 맡은 일이면 외부 모델로 취합 보고를 쓰지 않고 피클에게 넘겨요 */
+      if (isPicoWork(sec)) {
+        sec.status = 'working';
+        sec.phase = 'collect';
+        sec.picoStatus = 'report';
+        sec.picoReportAt = nowIso();
+        sec.currentChildId = '';
+        pushLog(sec, '팀 결과 도착 · 피클 최종 취합 보고 대기');
+        renderAll(); saveOfficeSoon(0);
+        startPolling();   /* 피클이 보고를 올리면 화면에 바로 보이게 */
+        return;
+      }
       var rep = await buildCollectReport(sec);
       sec.report = rep.report;
       sec.secretary = rep.secretary;
-      sec.code = rep.code || null;
+      sec.code = rep.code || sec.code || null;
       sec.status = 'waiting';
       sec.phase = 'report';
       sec.updatedAt = nowIso();
@@ -5158,6 +5404,113 @@ var QR = (function () {
       if (sec) { sec.updatedAt = nowIso(); sec.currentChildId = ''; }
       renderAll(); saveOfficeSoon(0);
     }
+  }
+
+  /* ---------- 자동 재처리 (중간 오류·타임아웃· code_edit 누락) ---------- */
+  var AUTO_RETRY_MAX = 2;
+  /* 바로 실패 보고를 올리지 않고, 직전 실행 기록을 안고 한 번 더 자동으로 시도해요.
+     다시 시도해도 안 될 때만 결재함에 원인·시도 내역과 함께 보고해요. */
+  function autoRetry(item, reason, mode, maxTry) {
+    if (!item || isPicoWork(item)) return false;
+    var limit = maxTry || AUTO_RETRY_MAX;
+    var tries = Number(item.tries) || 0;
+    if (tries >= limit) return false;
+    item.tries = tries + 1;
+    item.autoRetryLog = item.autoRetryLog || [];
+    item.autoRetryLog.push({ at: nowIso(), reason: clip(reason, 200), try: item.tries });
+    attachPrior(item, item, '자동 재처리 ' + item.tries + '번째 · ' + clip(reason, 160));
+    pushLog(item, '자동 재처리 ' + item.tries + '/' + limit + ' · ' + clip(reason, 90));
+    item.status = 'working';
+    item.error = '';
+    renderAll(); saveOfficeSoon(0);
+    window.setTimeout(function () {
+      var live = workById(item.id);
+      if (!live || live.status !== 'working') return;
+      kick(live, mode || 'item');
+    }, 1200);
+    return true;
+  }
+  function newCodeRedoWork(sec, why) {
+    var t = teamById('dev') || { name: '개발(코딩)팀' };
+    var brief = '[실제 코드 수정안 요청]\n' + clip(sec.brief, 2500) +
+      '\n\n앞선 작업에서 실제 코드 수정안(code_edit)이 만들어지지 않았어요. 이번에는 반드시 code_edit 도구로 실제 파일을 고치는 수정안을 만들어 주세요.' +
+      '\n- 아이 화면(kids-dashboard)은 index.html(17KB 셸) + js/*.js 모듈(ui·events·routines·settings·sync·core·missions·myroom 등) + css/style.css 구조예요. 고칠 기능이 있는 모듈 파일을 찾아 그 파일을 고치세요.' +
+      '\n- search_code로 함수·표시 문구를 찾고, read_code_slice로 앞뒤를 확인한 뒤, code_edit의 edits(찾아 바꾸기)로 작게 고칩니다. path에는 실제 파일 이름(예: js/ui.js)을 적으세요.';
+    var w = newWork('dev', '코드 수정 다시 · ' + clip(sec.title, 34), brief, [], sec.id);
+    w.kind = 'delegation-child';
+    w.secId = sec.id;
+    w.codeRedoOf = sec.id;
+    w.codeWanted = true;
+    w.status = 'working';
+    attachPrior(w, sec, why || '코드 수정안이 비어 있어 개발팀에 다시 요청');
+    sec.codeRedoId = w.id;
+    sec.codeRedoAt = nowIso();
+    sec.codeWanted = true;
+    sec.codeMissing = false;
+    pushLog(sec, '개발팀에 실제 코드 수정안 다시 요청');
+    pushLog(w, '대표님 지시 · 실제 코드 수정안 만들기');
+    return w;
+  }
+  async function autoCodeRedo(sec) {
+    var w = newCodeRedoWork(sec, '코드 수정안이 비어 있어 자동으로 다시 요청');
+    pushLog(sec, '자동 재처리 · 코드 수정안 다시 요청');
+    renderAll(); saveOfficeSoon(0);
+    await runChildSafe(w, sec, '개발(코딩)팀');
+    if (w.code) { sec.code = w.code; sec.codeMissing = false; }
+    renderAll(); saveOfficeSoon(0);
+    return w.code || null;
+  }
+  /* 하위 일 하나를 실행하고, 중간 오류는 직전 기록을 안고 한 번 더 시도해요 */
+  async function runChildSafe(child, sec, tname) {
+    var limit = 2;
+    for (var tryNo = 0; tryNo < limit; tryNo++) {
+      try {
+        child.report = await runTeamAgent(child, teamById(child.teamId) || { id: child.teamId, name: child.teamId, desc: '' });
+        child.status = 'done';
+        child.doneAt = nowIso();
+        pushLog(child, '보고 도착');
+        if (sec) pushLog(sec, tname + ' 결과 도착');
+        if (child.code) {
+          if (sec) pushLog(sec, '수정안 도착 · ' + fileLabel(child.code.repo, child.code.path) + ' (아직 반영 전)');
+          linkRedoCode(child);
+        }
+        return true;
+      } catch (e) {
+        var msg = String(e && e.message ? e.message : e);
+        child.tries = (Number(child.tries) || 0) + 1;
+        child.autoRetryLog = child.autoRetryLog || [];
+        child.autoRetryLog.push({ at: nowIso(), reason: clip(msg, 200), try: child.tries });
+        if (tryNo < limit - 1) {
+          attachPrior(child, child, '자동 재처리 · ' + clip(msg, 160));
+          pushLog(child, '자동 재처리 ' + child.tries + '/' + (limit - 1) + ' · ' + clip(msg, 90));
+          if (sec) pushLog(sec, tname + ' 자동 재처리 · ' + clip(msg, 80));
+          renderAll(); saveOfficeSoon(0);
+          continue;
+        }
+        child.status = 'failed';
+        child.error = msg;
+        child.report = child.report || { summary: '작업을 마치지 못했어요.', detail: msg, next: [], at: nowIso() };
+        pushLog(child, '실패 · ' + clip(msg, 120));
+        if (sec) pushLog(sec, tname + ' 실패 · ' + clip(msg, 90));
+        return false;
+      }
+    }
+    return false;
+  }
+  /* 다시 요청한 개발팀 수정안을 원래 비서 일에 붙여요 */
+  function pickChildCode(sec) {
+    var kids = secChildList(sec), code = null;
+    for (var i = 0; i < kids.length; i++) if (kids[i] && kids[i].code) code = kids[i].code;
+    return code;
+  }
+  function linkRedoCode(child) {
+    if (!child || !child.codeRedoOf || !child.code) return;
+    var parent = workById(child.codeRedoOf);
+    if (!parent) return;
+    parent.code = child.code;
+    parent.codeMissing = false;
+    parent.codeWanted = true;
+    pushLog(parent, '수정안 도착 · ' + fileLabel(child.code.repo, child.code.path) + ' (아직 반영 전)');
   }
   async function buildCollectReport(sec) {
     var kids = secChildList(sec);
@@ -5240,6 +5593,18 @@ var QR = (function () {
       item.updatedAt = nowIso();
       pushLog(item, '팀 보고 도착');
       renderAll(); saveOfficeSoon(0);
+      /* 개발팀인데 코드 수정안이 없으면, 실패로 올리기 전에 한 번 더 요청해요 */
+      if (team.id === 'dev' && !item.code && codeIntent(item)) {
+        markTry(item, 'code_edit 누락 · 실제 수정안이 없어 다시 요청');
+        attachPrior(item, item, '설명만 있고 실제 code_edit 수정안이 없어 다시 요청');
+        pushLog(item, '자동 재처리 · 수정안이 없어 다시 요청');
+        renderAll(); saveOfficeSoon(0);
+        var again = await runTeamAgent(item, team);
+        if (again) item.report = again;
+        if (item.code) pushLog(item, '수정안 도착 · ' + fileLabel(item.code.repo, item.code.path) + ' (아직 반영 전)');
+        else pushLog(item, '수정안이 끝까지 만들어지지 않음');
+        renderAll(); saveOfficeSoon(0);
+      }
       pushLog(item, '비서 정리 보고 작성 중');
       renderAll(); saveOfficeSoon(0);
       var sec = await runSecretary(item);
@@ -5247,13 +5612,18 @@ var QR = (function () {
       item.status = 'waiting';
       item.updatedAt = nowIso();
       pushLog(item, '비서 정리 보고 → 대표실 결재 대기');
+      if (item.code) linkRedoCode(item);
       toast('비서가 정리 보고를 올렸어요. 대표실 결재함을 봐 주세요.');
     } catch (e) {
+      var imsg = String(e && e.message ? e.message : e);
+      /* 바로 실패로 끝내지 않고, 직전 진행 기록을 안고 한 번 더 자동으로 시도해요 */
+      if (autoRetry(item, imsg, 'item')) return;
       item.status = 'failed';
-      item.error = String(e && e.message ? e.message : e);
-      item.report = item.report || { summary: '작업을 마치지 못했어요.', detail: item.error, next: [] };
-      pushLog(item, '실패 · ' + clip(item.error, 120));
-      toast('작업을 마치지 못했어요: ' + clip(item.error, 90));
+      item.error = imsg;
+      item.report = item.report || { summary: '작업을 마치지 못했어요.', detail: imsg, next: [] };
+      pushLog(item, '실패 · ' + clip(imsg, 120));
+      makeNotice(item, '자동 재처리 ' + (Number(item.tries) || 0) + '번까지 했지만 작업을 마치지 못했어요 · ' + clip(imsg, 120), true);
+      toast('작업을 마치지 못했어요: ' + clip(imsg, 90));
     } finally {
       delete S.busy[item.id];
       item.updatedAt = nowIso();
@@ -5294,6 +5664,14 @@ var QR = (function () {
     if (!item || item.status !== 'waiting') return;
     if (item.kind === 'delegation') {
       if (item.phase === 'plan') { startDelegation(id); return; }
+      /* 코드 수정이 필요한 일은 실제 수정안 없이 승인으로 끝내지 않아요 */
+      if (!item.code && (item.codeMissing || codeIntent(item))) {
+        item.codeMissing = true;
+        pushLog(item, '승인 보류 · 실제 코드 수정안이 없어 승인할 수 없어요');
+        renderAll(); saveOfficeSoon(0);
+        toast('⚠️ 실제 코드 수정안이 만들어지지 않았어요. [개발팀에 다시 코드 작성 요청]이나 [반려 후 삭제]를 골라 주세요.');
+        return;
+      }
       item.status = 'approved';
       item.approvedAt = nowIso();
       item.nextDone = true;
@@ -5337,6 +5715,15 @@ var QR = (function () {
       item.childIds = [];
       S.rejectOpen[id] = false;
       pushLog(item, '대표님 반려 · ' + clip(reason, 100));
+      if (isPicoWork(item)) {
+        /* 1F 비서실은 피클이 사유를 반영해 다시 계획해요 */
+        item.picoStatus = 'pending';
+        item.picoRequestedAt = nowIso();
+        pushLog(item, '비서 피클 확인 대기 · 반려 사유를 반영해 계획을 다시 세워요');
+        renderAll(); saveOfficeSoon(0);
+        toast('반려했어요. 피클이 사유를 반영해 배분 계획을 다시 세워요.');
+        return;
+      }
       pushLog(item, '반려 사유를 반영해 배분 계획 다시 세우는 중');
       item.planNote = clip(reason, 600);
       renderAll(); saveOfficeSoon(0);
@@ -5364,6 +5751,7 @@ var QR = (function () {
       }
     }
     var re = newWork(target, item.title + ' (재작업)', item.brief + briefExtra + '\n\n[대표님 반려 사유 — 이 점을 고쳐 다시 해 주세요]\n' + reason, item.materialIds, item.id);
+    attachPrior(re, item, '대표님 반려 뒤 재작업 · ' + clip(reason, 120));
     pushLog(re, '반려 재작업 시작');
     renderAll(); saveOfficeSoon(0);
     kick(re, 'item');
@@ -5465,6 +5853,11 @@ var QR = (function () {
   function finishNext(id) {
     var item = workById(id);
     if (!item) return;
+    /* 코드 수정안은 실제로 반영(커밋)되기 전에는 마무리로 넘기지 않아요 */
+    if ((item.code || item.codeMissing) && !(item.commit && item.commit.ok)) {
+      toast('코드 수정안은 아직 반영 전이에요. [QC 검수]나 [지금 바로 반영]을 먼저 골라 주세요.');
+      return;
+    }
     item.nextDone = true;
     item.nextAt = nowIso();
     renderAll(); saveOfficeSoon(0);
@@ -5485,12 +5878,13 @@ var QR = (function () {
     for (var k = 0; k < pend.length; k++) if (seen.indexOf(pend[k].id) < 0) seen.push(pend[k].id);
     S.office.inboxSeen = seen.slice(-300);
     startDirective({
-      teamId: 'cs',
-      title: '접수 건 취합 (' + pend.length + '건)',
+      teamId: 'sec',
+      title: '접수함 취합 (' + pend.length + '건)',
       text: '아래 접수 건들을 취합해 주세요. 같은 요구는 묶고, 바로 할 일 / 결정이 필요한 일 / 나중에 할 일로 나눠 정리해 주세요.\n\n' +
         lines.join('\n'),
       material: '',
-      sources: true
+      sources: true,
+      picoSource: 'inbox'
     }, { keepTab: true });
     S.tab = 'office';
     renderAll();
@@ -5581,8 +5975,12 @@ var QR = (function () {
     }
     var busy = false;
     for (var k = 0; k < work.length; k++) if (S.busy[work[k].id]) busy = true;
-    var foot = '<span class="tc-foot"><span class="status ' + st + '"><i></i>' + esc(STATUS_LABEL[st]) + '</span>' +
-      '<span class="tc-n">' + (openN ? '결재 <b>' + openN + '</b>' : (doneN ? '완료 ' + doneN : (busy ? '일하는 중' : ''))) + '</span></span>';
+    var picoList = isPickleTeam(t) ? picoPendingFor(t.id) : [];
+    var picoN = picoList.length, picoRep = false;
+    for (var pi = 0; pi < picoList.length; pi++) if (picoList[pi].picoStatus === 'report') picoRep = true;
+    var statusTxt = picoN ? (picoRep ? '피클 보고 대기' : '피클 확인 대기') : STATUS_LABEL[st];
+    var foot = '<span class="tc-foot"><span class="status ' + st + (picoN ? ' pickle' : '') + '"><i></i>' + esc(statusTxt) + '</span>' +
+      '<span class="tc-n">' + (picoN ? '피클 확인 <b>' + picoN + '</b>' : (openN ? '결재 <b>' + openN + '</b>' : (doneN ? '완료 ' + doneN : (busy ? '일하는 중' : '')))) + '</span></span>';
     /* 1F 전담 비서 피클 — 모델 뱃지 대신 피클 이름과 역할을 보여 줘요 */
     if (isPickleTeam(t)) {
       return '<button class="team-card pickle" type="button" data-act="team-click" data-team="' + esc(t.id) + '"' +
@@ -5743,7 +6141,7 @@ var QR = (function () {
     h += '<div class="pane-body"><form id="directForm" autocomplete="off">';
     if (S.directHint) h += '<p class="hint" style="color:#5d4f96;font-weight:900">' + esc(S.directHint) + '</p>';
     h += '<div class="field"><span class="lbl">부서</span><select id="directTeam">' + teamOptions(S.draft.team) + '</select></div>';
-    if (S.draft.team === 'sec') h += '<p class="hint">1F 비서실은 전담 비서 피클이 맡아요. 여기에 적으면 피클이 어떤 팀에 어떤 순서로 나눌지 배분 계획을 먼저 올라요. 승인하면 팀들이 차례로 일하고, 끝나면 피클이 결과를 하나로 모아 다시 결재함에 올려요.</p>';
+    if (S.draft.team === 'sec') h += '<p class="hint">1F 비서실은 전담 비서 피클이 맡아요. 여기에 적으면 피클이 직접 확인해서 어떤 팀에 어떤 순서로 나눌지 배분 계획을 세우고 결재함에 올려요. 외부 AI 일꾼은 부르지 않아요.</p>';
     h += '<div class="field"><span class="lbl">제목 (선택)</span><input id="directTitle" maxlength="60" placeholder="예: 11월 말 가계부 정리" value="' + esc(S.draft.title) + '"></div>';
     h += '<div class="field"><span class="lbl">지시 내용</span><textarea id="directText" placeholder="예: 이번 주 냉장고 재고로 만들 수 있는 저녁 메뉴 3가지를 정리해 줘.">' + esc(S.draft.text) + '</textarea></div>';
     h += '<div class="field"><span class="lbl">넘길 자료 (선택)</span><select id="directMaterial">' + materialOptions(S.draft.material) + '</select></div>';
@@ -5813,10 +6211,12 @@ var QR = (function () {
     }
     if (item.status === 'waiting') {
       h += '<div class="ap-actions"><button class="btn-s ok" type="button" data-act="approve" data-id="' + esc(item.id) + '">승인</button>' +
-        '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(item.id) + '">반려</button></div>';
+        '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(item.id) + '">반려</button>' +
+        '<button class="btn-s danger" type="button" data-act="delete-work" data-id="' + esc(item.id) + '">삭제</button></div>';
       if (S.rejectOpen[item.id]) {
         h += '<div class="rejectbox"><textarea id="rej_' + esc(item.id) + '" placeholder="반려 사유 — 이 내용으로 팀이 다시 일해요"></textarea>' +
           '<div class="btn-line" style="margin-top:6px"><button class="btn warn" type="button" data-act="reject" data-id="' + esc(item.id) + '">반려하고 재작업</button>' +
+          '<button class="btn danger" type="button" data-act="reject-delete" data-id="' + esc(item.id) + '">반려 후 삭제</button>' +
           '<button class="btn ghost" type="button" data-act="reject-cancel" data-id="' + esc(item.id) + '">취소</button></div></div>';
       }
     } else if (item.status === 'approved') {
@@ -5827,7 +6227,8 @@ var QR = (function () {
         h += '<div class="ap-rec">승인 완료 · 마무리했어요</div>';
       }
     } else if (item.status === 'rejected') {
-      h += '<div class="ap-rec" style="background:#fff1f2;color:#c14160">반려함 · ' + esc(clip(item.rejectReason || '', 120)) + '</div>';
+      h += '<div class="ap-rec" style="background:#fff1f2;color:#c14160">반려함 · ' + esc(clip(item.rejectReason || '', 120)) + '</div>' +
+        '<div class="ap-actions"><button class="btn-s danger" type="button" data-act="delete-work" data-id="' + esc(item.id) + '">삭제</button></div>';
     }
     h += '</div>';
     return h;
@@ -5923,23 +6324,36 @@ var QR = (function () {
       h += '<details class="ap-d" data-key="' + esc(dk3) + '"' + (S.details[dk3] ? ' open' : '') + '><summary>작업 기록</summary><div class="ap-detail">' +
         esc(item.log.map(function (x) { return '· ' + x.text; }).join('\n')) + '</div></details>';
     }
+    /* 코드 수정이 필요한 일인데 수정안이 비어 있으면 단순 [승인]으로 완료되지 않게 막아요 */
+    var missCode = !item.code && phase !== 'plan' && (item.codeMissing || codeIntent(item));
+    if (missCode) {
+      h += '<div class="ap-rec" style="background:#fff4e5;color:#8a5a00;border:1px solid #f0dcc0">⚠️ 실제 코드 수정안이 만들어지지 않았어요</div>' +
+        '<p class="tm-note">텍스트 보고만으로는 완료 처리하지 않아요. 개발팀에 실제 코드 수정안을 다시 요청하거나, 필요 없는 일이면 반려 후 삭제해 주세요.</p>';
+    }
     if (item.status === 'waiting') {
       h += '<div class="ap-actions">';
-      if (phase === 'plan') {
+      if (missCode) {
+        h += '<button class="btn-s ok" type="button" data-act="sec-code-retry" data-id="' + esc(item.id) + '">개발팀에 다시 코드 작성 요청</button>' +
+          '<button class="btn-s danger" type="button" data-act="reject-delete" data-id="' + esc(item.id) + '">반려 후 삭제</button>';
+      } else if (phase === 'plan') {
         h += '<button class="btn-s ok" type="button" data-act="approve" data-id="' + esc(item.id) + '">배분 계획 승인</button>' +
-          '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(item.id) + '">반려</button>';
+          '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(item.id) + '">반려</button>' +
+          '<button class="btn-s danger" type="button" data-act="delete-work" data-id="' + esc(item.id) + '">삭제</button>';
       } else if (item.code) {
         h += '<button class="btn-s ok" type="button" data-act="sec-qc" data-id="' + esc(item.id) + '">QC 검수 요청</button>' +
           '<button class="btn-s ok" type="button" data-act="sec-commit" data-id="' + esc(item.id) + '">최종 승인하고 반영</button>' +
-          '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(item.id) + '">반려</button>';
+          '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(item.id) + '">반려</button>' +
+          '<button class="btn-s danger" type="button" data-act="delete-work" data-id="' + esc(item.id) + '">삭제</button>';
       } else {
         h += '<button class="btn-s ok" type="button" data-act="approve" data-id="' + esc(item.id) + '">승인</button>' +
-          '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(item.id) + '">반려</button>';
+          '<button class="btn-s warn" type="button" data-act="reject-open" data-id="' + esc(item.id) + '">반려</button>' +
+          '<button class="btn-s danger" type="button" data-act="delete-work" data-id="' + esc(item.id) + '">삭제</button>';
       }
       h += '</div>';
-      if (S.rejectOpen[item.id]) {
+      if (S.rejectOpen[item.id] && !missCode) {
         h += '<div class="rejectbox"><textarea id="rej_' + esc(item.id) + '" placeholder="반려 사유 — 이 내용으로 비서가 배분 계획을 다시 세워요"></textarea>' +
           '<div class="btn-line" style="margin-top:6px"><button class="btn warn" type="button" data-act="reject" data-id="' + esc(item.id) + '">반려하고 다시 계획</button>' +
+          '<button class="btn danger" type="button" data-act="reject-delete" data-id="' + esc(item.id) + '">반려 후 삭제</button>' +
           '<button class="btn ghost" type="button" data-act="reject-cancel" data-id="' + esc(item.id) + '">취소</button></div></div>';
       }
     } else if (item.status === 'approved') {
@@ -5951,9 +6365,12 @@ var QR = (function () {
         h += '<div class="ap-rec">대표님 최종 승인 완료</div>';
       }
     } else if (item.status === 'rejected') {
-      h += '<div class="ap-rec" style="background:#fff1f2;color:#c14160">반려함 · ' + esc(clip(item.rejectReason || '', 120)) + '</div>';
+      h += '<div class="ap-rec" style="background:#fff1f2;color:#c14160">반려함 · ' + esc(clip(item.rejectReason || '', 120)) + '</div>' +
+        '<div class="ap-actions"><button class="btn-s danger" type="button" data-act="delete-work" data-id="' + esc(item.id) + '">삭제</button></div>';
     } else if (item.status === 'failed') {
-      h += '<div class="ap-rec" style="background:#fff1f2;color:#c14160">실패 · ' + esc(clip(item.error || '', 140)) + '</div>';
+      h += '<div class="ap-rec" style="background:#fff1f2;color:#c14160">실패 · ' + esc(clip(item.error || '', 140)) + '</div>' +
+        '<div class="ap-actions"><button class="btn-s ok" type="button" data-act="rerun-work" data-id="' + esc(item.id) + '">다시 실행</button>' +
+        '<button class="btn-s danger" type="button" data-act="delete-work" data-id="' + esc(item.id) + '">삭제</button></div>';
     }
     h += '</div>';
     return h;
@@ -6007,7 +6424,8 @@ var QR = (function () {
         '<div class="ap-t">' + esc(fw.title) + '</div>' +
         '<div class="ap-sum">' + esc(fw.error || '작업을 마치지 못했어요.') + '</div>' +
         '<div class="ap-actions"><button class="btn-s ok" type="button" data-act="retry" data-id="' + esc(fw.id) + '">다시 맡기기</button>' +
-        '<button class="btn-s" type="button" data-act="dismiss-fail" data-id="' + esc(fw.id) + '">치우기</button></div></div>';
+        '<button class="btn-s" type="button" data-act="dismiss-fail" data-id="' + esc(fw.id) + '">치우기</button>' +
+        '<button class="btn-s danger" type="button" data-act="delete-work" data-id="' + esc(fw.id) + '">삭제</button></div></div>';
     }
     for (var i = wait.length - 1; i >= 0; i--) h += apCard(wait[i]);
     if (next.length) {
@@ -6019,9 +6437,11 @@ var QR = (function () {
       for (var d = 0; d < done.length; d++) {
         var dd = done[d], dteam = teamById(dd.teamId) || { name: dd.teamId, emoji: '📄' };
         h +=
-          '<div class="mrow"><div class="mi"><b>' + esc(dd.title) + '</b><span>' +
+          '<div class="mrow" data-act="open-work-detail" data-id="' + esc(dd.id) + '" role="button" tabindex="0" title="눌러서 자세히 보기">' +
+          '<div class="mi"><b>' + esc(dd.title) + '</b><span>' +
           esc(dteam.name + ' · ' + (dd.commit ? (dd.commit.ok ? '코드 반영 완료' : '반영 실패') : '승인 후 마무리') + ' · ' + whenLabel(dd.nextAt || dd.updatedAt)) +
-          '</span></div><span class="badge">' + (dd.commit && dd.commit.ok ? '반영됨' : '완료') + '</span></div>';
+          '</span></div><span class="badge">' + (dd.commit && dd.commit.ok ? '반영됨' : '완료') + '</span>' +
+          '<button class="btn-s danger mini" type="button" data-act="delete-work" data-id="' + esc(dd.id) + '">삭제</button></div>';
       }
     }
     h += '</div></section>';
@@ -6031,9 +6451,9 @@ var QR = (function () {
     var pend = pendingInbox();
     var h = '<section class="pane" data-pane="inbox">';
     h += '<div class="pane-head"><h3>📥 CS 접수함</h3><span class="n">' + (pend.length ? '미처리 ' + pend.length : '미처리 없음') + '</span></div><div class="pane-body">';
-    h += '<p class="hint">아이·냉파·가계부·우리 집 화면의 챗봇 버튼으로 들어온 요구가 여기 모여요. 접수함이 비어 있으면 아직 새 요구가 없다는 뜻이에요.</p>';
+    h += '<p class="hint">아이·냉파·가계부·우리 집 화면의 챗봇 버튼으로 들어온 요구가 여기 모여요. 접수함이 비어 있으면 아직 새 요구가 없다는 뜻이에요. 1F 비서실(피클)이 접수해 브리핑·배분 계획을 올려요.</p>';
     h += '<div class="btn-line"><button class="btn ghost" type="button" data-act="inbox-refresh">새로 고침</button>' +
-      '<button class="btn clay" type="button" data-act="inbox-collect"' + (pend.length ? '' : ' disabled') + '>CS팀에 취합 지시</button></div>';
+      '<button class="btn clay" type="button" data-act="inbox-collect"' + (pend.length ? '' : ' disabled') + '>피클에게 취합 지시</button></div>';
     if (S.inbox && S.inbox.error) h += '<p class="hint" style="color:#c14160">' + esc(S.inbox.error) + '</p>';
     if (!pend.length) h += '<p class="empty">새로 접수된 요구가 없어요.</p>';
     for (var i = 0; i < pend.length && i < 20; i++) {
@@ -6118,6 +6538,17 @@ var QR = (function () {
         (cur.brief ? '<p class="tm-brief">' + esc(clip(cur.brief, 900)) + '</p>' : '') +
         ((cur.kind === 'delegation' && cur.phase === 'run') ? pipelineLine(cur) : '') + '</div>';
       h += '<div class="tm-sec"><div class="tm-h"><span>실시간 진행 로그</span><span class="when">' + ((cur.progressLog || []).length) + '단계</span></div>' + progressLogHtml(cur);
+      if (isPicoWork(cur)) {
+        h += '<p class="tm-note" style="background:#f2f9ee;color:#4d7a3c;border:1px solid #dcecd2">' + esc(picoLabel(cur)) + ' · 피클이 직접 확인해 배분 계획을 올려요. 외부 AI 일꾼은 부르지 않아요.</p>';
+        h += '<div class="tm-actions">' +
+          '<button class="btn-s" type="button" data-act="open-work-detail" data-id="' + esc(cur.id) + '">자세히 보기</button>' +
+          '<button class="btn-s danger" type="button" data-act="delete-work" data-id="' + esc(cur.id) + '">업무 삭제</button>' +
+          '</div>';
+        h += '</div>';
+        body.innerHTML = h;
+        body.scrollTop = reset ? 0 : keep;
+        return;
+      }
       if (cur.bg && cur.bg.via) {
         h += '<p class="tm-note">' + (cur.bg.via === 'trying' ? '백그라운드 일꾼을 부르는 중이에요.' : '백그라운드 일꾼이 일하고 있어요 · 창을 닫아도 계속돼요.') + '</p>';
       }
@@ -6210,6 +6641,96 @@ var QR = (function () {
     renderOffice();
     renderPanel();
     renderTeamModal();
+    renderWorkModal();
+    /* 피클이 처리할 일이 남아 있으면 3초 동기화를 켜 둬요 (피클이 계획·보고를 올리면 바로 보이게) */
+    if (S.unlocked && S.office && hasPicoPending()) startPolling();
+  }
+
+  /* ==================================================================
+     업무 자세히 보기 (최근 마무리·결재 카드에서 누르면 열려요)
+     ================================================================== */
+  function logHtml(item) {
+    var log = (item && item.log && item.log.length) ? item.log : ((item && item.progressLog) || []);
+    if (!log.length) return '<p class="tm-empty">작업 기록이 없어요.</p>';
+    var h = '<ol class="tm-log">';
+    for (var i = 0; i < log.length; i++) {
+      h += '<li><span class="t">' + esc(clockLabel(log[i].at)) + '</span><span>' + esc(log[i].text || '') + '</span></li>';
+    }
+    return h + '</ol>';
+  }
+  function renderWorkModal() {
+    if (!S.workModal) return;
+    var m = document.getElementById('workModal');
+    var body = document.getElementById('workModalBody');
+    if (!m || !body) return;
+    var w = workById(S.workModal);
+    if (!w) { body.innerHTML = '<p class="tm-empty">이 업무는 목록에서 지워졌어요.</p>'; return; }
+    var keep = body.scrollTop;
+    var isSec = w.teamId === 'sec';
+    var team = isSec ? secretaryTeam() : (teamById(w.teamId) || { name: w.teamId, emoji: '📄' });
+    var rep = w.report || {}, sec = w.secretary || {}, c = w.code || null;
+    var h = '';
+    h += '<div class="tm-sec"><div class="tm-h"><span>' + esc((team.emoji || '📄') + ' ' + team.name) + '</span><span class="when">' + esc(whenLabel(w.updatedAt || w.at)) + '</span></div>' +
+      '<div class="tm-title">' + esc(w.title || '일') + '</div>' +
+      '<p class="tm-note"><b>상태</b> ' + esc(workStateLabel(w)) + (w.commit && w.commit.at ? ' · ' + esc(whenLabel(w.commit.at)) : '') +
+      (w.at ? ' · 지시 ' + esc(whenLabel(w.at)) : '') + '</p>' +
+      '<p class="tm-brief">' + (w.brief ? esc(w.brief) : '지시 원문이 없어요.') + '</p></div>';
+    h += '<div class="tm-sec"><div class="tm-h"><span>팀 보고</span></div>' +
+      (rep.summary || rep.detail
+        ? (rep.summary ? '<p class="tm-brief">' + esc(rep.summary) + '</p>' : '') + (rep.detail ? '<div class="ap-detail">' + esc(rep.detail) + '</div>' : '')
+        : '<p class="tm-empty">팀 보고가 아직 없어요.</p>') + '</div>';
+    var secPts = (sec.points || []).slice(0, 6);
+    h += '<div class="tm-sec"><div class="tm-h"><span>비서 요약</span></div>' +
+      (sec.summary || w.secSummary
+        ? '<p class="tm-brief">' + esc(sec.summary || w.secSummary) + '</p>' +
+          (secPts.length ? '<ul class="ap-points">' + secPts.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>' : '') +
+          (sec.recommend ? '<div class="ap-rec">추천: ' + esc(sec.recommend) + '</div>' : '')
+        : '<p class="tm-empty">비서 요약이 아직 없어요.</p>') + '</div>';
+    h += '<div class="tm-sec"><div class="tm-h"><span>코드 수정안</span></div>';
+    if (c) {
+      h += '<p class="tm-note">' + esc(fileLabel(c.repo, c.path)) + ' · +' + esc(String(c.added || 0)) + ' −' + esc(String(c.removed || 0)) + ' · ' + (c.checkOk ? '자동 검사 통과' : '자동 검사 문제') + ' · ' + (w.commit && w.commit.ok ? '반영됨' : '아직 반영 전') + '</p>';
+      if (c.patchNote) h += '<p class="tm-brief">' + esc(c.patchNote) + '</p>';
+      if (c.diffText) h += '<div class="diffbox"><pre>' + diffHtmlPlain(c.diffText) + '</pre></div>';
+      if (c.checkErrors && c.checkErrors.length) h += '<div class="ap-detail">검사: ' + esc(c.checkErrors.join('\n')) + '</div>';
+    } else if ([w.codeMissing, codeIntent(w)].indexOf(true) >= 0) {
+      h += '<p class="tm-note" style="background:#fff4e5;color:#8a5a00;border:1px solid #f0dcc0">⚠️ 실제 코드 수정안이 만들어지지 않았어요.</p>';
+    } else {
+      h += '<p class="tm-empty">코드 수정안이 없는 업무예요.</p>';
+    }
+    h += '</div>';
+    h += '<div class="tm-sec"><div class="tm-h"><span>반영 기록</span></div>' +
+      (w.commit
+        ? '<p class="tm-note">' + (w.commit.ok ? '✅ 코드에 반영했어요 · ' + esc(fileLabel(w.commit.repo, w.commit.path)) + ' · ' + esc(whenLabel(w.commit.at)) : '⚠️ 반영하지 못했어요 · ' + esc(clip(w.commit.error || '', 200))) + '</p>'
+        : '<p class="tm-empty">' + (c ? '아직 반영 전이에요. QC 검수나 최종 승인 뒤에 반영돼요.' : '반영 기록이 없어요.') + '</p>') + '</div>';
+    h += '<div class="tm-sec"><div class="tm-h"><span>작업 기록</span><span class="when">' + (((w.log || []).length)) + '줄</span></div>' + logHtml(w) + '</div>';
+    h += '<div class="tm-actions">' +
+      '<button class="btn-s danger" type="button" data-act="delete-work" data-id="' + esc(w.id) + '">이 업무 삭제</button>' +
+      '<button class="btn-s" type="button" data-act="work-modal-close">닫기</button></div>';
+    body.innerHTML = h;
+    body.scrollTop = keep;
+  }
+  function openWorkDetail(id) {
+    var w = workById(id);
+    if (!w) { toast('그 업무를 찾지 못했어요.'); return; }
+    S.workModal = id;
+    var m = document.getElementById('workModal');
+    if (!m) return;
+    m.hidden = false;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    renderWorkModal();
+  }
+  function closeWorkDetail(keepScroll) {
+    S.workModal = null;
+    var m = document.getElementById('workModal');
+    if (m) m.hidden = true;
+    if (keepScroll) return;
+    var tm = document.getElementById('teamModal');
+    var sm = document.getElementById('settingsModal');
+    if ((!tm || tm.hidden) && (!sm || sm.hidden)) {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }
   }
 
   /* ==================================================================
@@ -6809,6 +7330,7 @@ var QR = (function () {
 
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' || e.key === 'Esc') {
+      if (S.workModal) { closeWorkDetail(); return; }
       if (S.teamModal) { closeTeamModal(); return; }
       closeSettings(); return;
     }
@@ -6822,6 +7344,8 @@ var QR = (function () {
   document.addEventListener('click', function (e) {
     var el = (e.target && e.target.closest) ? e.target.closest('[data-act]') : null;
     if (!el) {
+      var wm = document.getElementById('workModal');
+      if (wm && !wm.hidden && e.target === wm) { closeWorkDetail(); return; }
       var tm = document.getElementById('teamModal');
       if (tm && !tm.hidden && e.target === tm) { closeTeamModal(); return; }
       var sm = document.getElementById('settingsModal');
@@ -6855,6 +7379,11 @@ var QR = (function () {
       return;
     }
     if (act === 'team-modal-close') { closeTeamModal(); return; }
+    if (act === 'open-work-detail') { openWorkDetail(id); return; }
+    if (act === 'work-modal-close') { closeWorkDetail(); return; }
+    if (act === 'delete-work') { askDeleteWork(id); return; }
+    if (act === 'reject-delete') { rejectDelete(id); return; }
+    if (act === 'sec-code-retry') { secCodeRetry(id); return; }
     if (act === 'team-modal-go') {
       closeTeamModal();
       setTab('approve');
