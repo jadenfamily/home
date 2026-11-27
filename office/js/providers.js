@@ -12,35 +12,36 @@ var PROVIDERS = {
     gemini: {
       id: 'gemini', label: 'Google Gemini', short: 'Gemini', keyField: 'gemini',
       signup: 'https://aistudio.google.com/apikey', keyHint: 'AI Studio에서 무료로 받은 키 (AQ.… / AIza…)',
-      models: ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-4-hydrogen'],
+      models: ['gemini-3.8-flash'],
       call: geminiCall,
       list: geminiModels
     },
     openrouter: {
       id: 'openrouter', label: 'OpenRouter', short: 'OpenRouter', keyField: 'openrouter',
       signup: 'https://openrouter.ai/keys', keyHint: '무료(:free) 모델만 골라 써요 (sk-or-…)',
-      models: ['deepseek/deepseek-chat-v3.1:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen3-235b-a22b:free', 'google/gemma-3-27b-it:free'],
+      models: ['deepseek/deepseek-chat-v3.1:free'],
       call: openaiStyleCall('https://openrouter.ai/api/v1/chat/completions', 'openrouter', { 'HTTP-Referer': 'https://jadenfamily.github.io/home/', 'X-Title': 'jadenfamily AI Assistant' }),
       list: openrouterModels
     },
     groq: {
       id: 'groq', label: 'Groq', short: 'Groq', keyField: 'groq',
       signup: 'https://console.groq.com/keys', keyHint: 'console.groq.com에서 받은 키 (gsk_…)',
-      models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'qwen/qwen3-32b', 'openai/gpt-oss-120b'],
+      models: ['openai/gpt-oss-120b'],
       call: openaiStyleCall('https://api.groq.com/openai/v1/chat/completions', 'groq', {}),
       list: groqModels
     }
 };
 var PROVIDER_ORDER = ['gemini', 'openrouter', 'groq'];
+/* API마다 제일 괜찮은 모델 하나만 써요. (2026-11-27 대표님 지시: 모델이 너무 많아서 API별 최고 모델 1개로 축소) */
 /* 코딩·추론 팀(개발·QC)은 OpenRouter·Groq의 코딩 모델을 먼저 쓰고
    그쪽이 모두 한도·오류일 때만 Gemini를 맨 마지막 폴백으로 써요. (2026-11-27 대표님 지시) */
 var CODE_PROVIDER_ORDER = ['openrouter', 'groq', 'gemini'];
 var CODE_MODEL_ORDER = {
-    openrouter: ['deepseek/deepseek-chat-v3.1:free', 'qwen/qwen3-235b-a22b:free', 'meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'],
-    groq: ['openai/gpt-oss-120b', 'qwen/qwen3-32b', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
-    gemini: ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-4-hydrogen', 'gemini-3.5-flash-lite']
+    openrouter: ['deepseek/deepseek-chat-v3.1:free'],
+    groq: ['openai/gpt-oss-120b'],
+    gemini: ['gemini-3.8-flash']
 };
-var CODE_MODELS_PER_PROVIDER = 2;
+var CODE_MODELS_PER_PROVIDER = 1;
 function isCodeTeam(team) {
     var id = String((team && team.id) || '');
     return id === 'dev' || id === 'qc';
