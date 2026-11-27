@@ -432,6 +432,7 @@ function apDelegationCard(item) {
       if (sr.summary) h += '<div class="ap-sum">' + esc(clip(String(sr.summary), 400)) + '</div>';
       if (sr.hasCode) h += '<div class="codemeta"><span>' + esc('수정안 · ' + fileLabel((sr.code && sr.code.repo) || '', (sr.code && sr.code.path) || '')) + '</span><span class="' + ((sr.code && sr.code.checkOk) ? 'ok' : 'bad') + '">' + ((sr.code && sr.code.checkOk) ? '자동 검사 통과' : '자동 검사 문제') + '</span><span>아직 반영 전</span></div>';
       h += '<p class="tm-note">피클이 이 결과를 검수해 다음 팀(' + esc(sr.nextTeamName || '마감') + ')으로 넘기면 이어서 진행해요. 대표님이 따로 승인하지 않아도 돼요.</p>';
+      h += '<div class="ap-actions"><button class="btn-s ok" type="button" data-act="rerun-work" data-id="' + esc(item.id) + '">지금 다음 팀으로 넘기기</button></div>';
       if (kids.length) {
         h += '<div class="tm-list" style="margin-top:7px">';
         for (var sr2 = 0; sr2 < kids.length; sr2++) h += childRow(kids[sr2]);
