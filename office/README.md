@@ -38,6 +38,19 @@ office/js/             기능별 코드 (모두 같은 전역 스코프를 써�
 | `events.js` | 이벤트 위임(제출·입력·변경·클릭·키보드) |
 | `boot.js` | 시작 — 환경 설정 불러오기 · 첫 렌더 · 1초 틱 |
 
+## scripts/ (자동 실행 스크립트)
+
+화면과 별개로, 사무실 데이터를 만들러 도는 스크립트가 있어요.
+
+| 파일 | 맡은 일 |
+| --- | --- |
+| `scripts/daily-dba-research.mjs` | 금융권(증권사) DBA 데일리 리서치 본체 — 공개 피드에서 기사를 모아 AI로 요약하고 `kids-dashboard-data` 의 `ai-office/daily-dba-brief/` 와 사무실 기록을 남겨요 |
+| `scripts/run-dba-research.sh` | `kids-dashboard-data` 의 GitHub Actions 가 부르는 실행 껍데기 — 본체를 데이터 저장소 루트에서 돌리고 결과 파일을 커밋·푸시해요 |
+
+워크플로(`kids-dashboard-data/.github/workflows/daily-dba-research.yml`)는 데이터 저장소를 작업 폴더로,
+이 저장소(`jadenfamily/home`)를 `_home` 으로 받아 `bash _home/office/scripts/run-dba-research.sh` 를 실행해요.
+그래서 본체를 고칠 때는 이 저장소만 고치면 되고, 데이터 저장소에는 결과 파일만 쌓여요.
+
 ## 고칠 때
 
 - 함수 이름은 사무실 전체에서 하나예요. 새 함수를 넣을 때 같은 이름이 있는지 먼저 확인해요.
