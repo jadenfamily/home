@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /* ==================================================================
    📰 금융권(증권사) DBA 데일리 리서치 — jadenfamily/home · office/scripts/daily-dba-research.mjs
 
@@ -22,12 +21,17 @@
    5) ai-office/office-state.json 의 work[] 에 리서치팀 완료 기록 1건을 남긴다(같은 기록을
       매일 갱신하므로 사무실 기록이 계속 불어나지 않는다). GitHub Contents API 로 최신 sha 를
       다시 읽어 병합하고, 409 충돌이면 재시도한다.
+   6) 최근 7일 브리핑에 이미 실린 기사(URL·제목)는 수집 단계에서 빼서 같은 기사를 다시
+      보고하지 않는다.
+   7) 매주 월요일(Asia/Seoul)에는 지난 7일치를 모아 주간 요약(weekly-YYYY-MM-DD.json ·
+      latest-weekly.json)을 함께 만들고 사무실 기록(kind=weekly-brief)도 1건 갱신한다.
 
    실행 예 (작업 폴더는 데이터 저장소 루트)
      node _home/office/scripts/daily-dba-research.mjs            # 실제 실행(수집→요약→저장→사무실 기록)
      node _home/office/scripts/daily-dba-research.mjs --dry-run  # 수집·프롬프트까지만(AI 호출·저장 없음)
      node _home/office/scripts/daily-dba-research.mjs --no-ai --dump out.json   # 수집 결과만 파일로
      node _home/office/scripts/daily-dba-research.mjs --no-office     # 사무실 기록은 건너뜀
+     node _home/office/scripts/daily-dba-research.mjs --weekly        # 요일과 상관없이 주간 요약까지
      node _home/office/scripts/daily-dba-research.mjs --local    # GitHub API 대신 현재 폴더 파일 사용
    ================================================================== */
 import { webcrypto as WC } from 'node:crypto';
@@ -650,10 +654,46 @@ async function loadPreviousUrls() {
 }
 function FLAG_NO_PREV() { return flag('no-prev'); }
 
+/* ---------- 최근 7일 브리핑에 이미 다룬 기사 (중복 보고 방지) ---------- */
+function titleKey(t) {
+  return String(t || '').toLowerCase().replace(/[^a-z0-9가-힣]/g, '').slice(0, 60);
+}
+/* 오늘까지 n일 날짜(KST, 오래된 날 → 오늘) */
+function lastDays(n) {
+  const out = [];
+  const now = Date.now();
+  for (let i = n - 1; i >= 0; i--) out.push(kstParts(new Date(now - i * 86400000)).date);
+  return out;
+}
+/* 오늘을 뺀 지난 7일 브리핑에 실린 URL·제목 */
+async function loadCovered7() {
+  const set = { urls: {}, titles: {}, days: [] };
+  if (FLAG_NO_PREV()) return set;
+  for (const d of lastDays(8)) {
+    if (d === TODAY) continue;
+    const r = await ghRead(P_OUT_DIR + '/' + d + '.json');
+    if (!r.ok) { warn('지난 브리핑을 읽지 못했어요 · ' + d + ' · ' + (r.error || '')); continue; }
+    if (r.missing) continue;
+    let j = null;
+    try { j = JSON.parse(r.text); } catch (e) { j = null; }
+    if (!j) continue;
+    set.days.push(d);
+    for (const so of (Array.isArray(j.sources) ? j.sources : [])) { const k = normUrl(so && so.url); if (k) set.urls[k] = 1; }
+    for (const it of (Array.isArray(j.items) ? j.items : [])) { const k = normUrl(it && it.url); if (k) set.urls[k] = 1; }
+    for (const sec of (Array.isArray(j.sections) ? j.sections : [])) {
+      for (const it of ((sec && sec.items) || [])) {
+        const k = normUrl(it && it.url); if (k) set.urls[k] = 1;
+        const t = titleKey(it && it.title); if (t) set.titles[t] = 1;
+      }
+    }
+  }
+  return set;
+}
+
 /* ==================================================================
    수집 전체 실행
    ================================================================== */
-async function collectAll() {
+async function collectAll(covered) {
   const t0 = Date.now();
   const tasks = [];
 
@@ -695,6 +735,15 @@ async function collectAll() {
   }
   all = dedupe(all);
 
+  /* 최근 7일 브리핑에 이미 실린 기사는 64건을 고르기 전에 뺀다. */
+  const cov = covered || { urls: {}, titles: {} };
+  let skippedOld = 0;
+  all = all.filter(function (it) {
+    const k = normUrl(it.url), t = titleKey(it.title);
+    if ((k && cov.urls && cov.urls[k]) || (t && cov.titles && cov.titles[t])) { skippedOld += 1; return false; }
+    return true;
+  });
+
   /* 최신 기사 우선, 보안/CVE 는 조금 더 위로 */
   all.sort(function (a, b) {
     const pa = (b.ms || 0) - (a.ms || 0);
@@ -720,7 +769,7 @@ async function collectAll() {
   const picked = finalItems;
   picked.forEach(function (it, i) { it.ref = i + 1; });
 
-  return { items: picked, total: all.length, feedStats: feedStats, versions: versions, ms: Date.now() - t0 };
+  return { items: picked, total: all.length, skipped: skippedOld, feedStats: feedStats, versions: versions, ms: Date.now() - t0 };
 }
 
 /* ==================================================================
@@ -1033,6 +1082,199 @@ function briefToText(brief, date) {
 }
 
 /* ==================================================================
+   주간 요약 — 매주 월요일, 지난 7일 데일리 브리핑을 한 장으로
+   ================================================================== */
+function buildWeeklySystemPrompt() {
+  return [
+    '당신은 증권사(금융권)에서 Oracle·MySQL을 운영하는 DBA를 돕는 "리서치팀"입니다.',
+    '지난 7일간의 데일리 브리핑을 모아 한 장짜리 주간 요약을 만듭니다.',
+    '독자: 2009년부터 DBA, 주력 MySQL, Oracle·PostgreSQL·Aurora MySQL 운영. 2026년 4월~12월 육아휴직, 2027년 1월 11일 복귀 예정.',
+    '',
+    '지켜야 할 규칙:',
+    '1) 반드시 JSON 하나만 출력합니다. 설명·인사말·코드블록 표시를 붙이지 마세요.',
+    '2) 입력으로 주는 데일리 브리핑 내용만 씁니다. 없는 버전·날짜·CVE·회사·URL을 만들지 마세요.',
+    '3) 한국어로 씁니다. 제품명·버전·CVE ID는 원어 그대로 둡니다.',
+    '4) headline 은 정확히 3개, 각 90자 이내. 이번 주에 가장 중요한 변화만.',
+    '5) trends 는 2~5개. 한 주에 걸쳐 이어진 흐름을 묶어 씁니다. items 에는 근거가 된 데일리 항목의 제목·URL을 그대로 옮깁니다.',
+    '6) changes 는 2~4개. 무엇이 바뀌었나(area) / 무엇이 달라지나(what) / 그래서 무엇을 하나(why).',
+    '7) returnPrep 은 2~4개. 복귀(2027-01-11) 전에 해 둘 일을 phase(복귀 전·복귀 1주·복귀 1개월)로 나눠 적습니다.',
+    '8) sources 에는 실제로 쓴 기사만 넣습니다.',
+    '',
+    '출력 JSON 형식:',
+    '{',
+    '  "headline": ["...", "...", "..."],',
+    '  "trends": [{"title": "...", "summary": "...", "items": [{"title": "...", "url": "...", "source": "...", "published": "..."}]}],',
+    '  "changes": [{"area": "...", "what": "...", "why": "..."}],',
+    '  "returnPrep": [{"phase": "복귀 전", "todo": "...", "why": "..."}],',
+    '  "sources": [{"title": "...", "url": "...", "source": "...", "published": "..."}]',
+    '}'
+  ].join('\n');
+}
+async function readWeekBriefs(days) {
+  const out = [];
+  for (const d of days) {
+    const r = await ghRead(P_OUT_DIR + '/' + d + '.json');
+    if (!r.ok || r.missing) continue;
+    let j = null;
+    try { j = JSON.parse(r.text); } catch (e) { j = null; }
+    if (!j) continue;
+    if (!j.date) j.date = d;
+    out.push(j);
+  }
+  return out;
+}
+function buildWeeklyPrompt(briefs, days) {
+  const L = [];
+  L.push('[기간] ' + (days[0] || '') + ' ~ ' + (days[days.length - 1] || '') + ' (지난 7일)');
+  L.push('[자료] 데일리 브리핑 ' + briefs.length + '일치. 여기에 없는 내용은 쓰지 마세요.');
+  for (const b of briefs) {
+    L.push('');
+    L.push('## ' + (b.date || '') + (b.weekday ? ' (' + b.weekday + ')' : ''));
+    for (const h of (Array.isArray(b.headline) ? b.headline : []).slice(0, 3)) L.push('- ' + h);
+    for (const sec of (Array.isArray(b.sections) ? b.sections : [])) {
+      const items = (sec && sec.items) || [];
+      if (!items.length) continue;
+      L.push('[' + (sec.title || sec.id || '') + ']');
+      for (const it of items.slice(0, 6)) {
+        L.push('· ' + it.title + ' — ' + clip(it.summary, 220) + (it.url ? ' (' + it.url + ')' : ''));
+      }
+    }
+  }
+  L.push('');
+  L.push('[요청] 위 자료만 근거로 이번 주 주간 요약 JSON 을 만드세요.');
+  return L.join('\n');
+}
+async function runWeeklyAi(keys, system, user) {
+  const attempts = [];
+  const order = ['openrouter', 'groq', 'gemini'];
+  for (const pid of order) {
+    const prov = PROVIDERS.filter(function (p) { return p.id === pid; })[0];
+    const list = (keys[pid] || []).filter(Boolean);
+    if (!list.length) { attempts.push(pid + ': 키 없음'); continue; }
+    let emptyCount = 0;
+    for (const model of prov.models) {
+      const key = list[0];
+      log('주간 AI 호출 · ' + prov.label + ' ' + model);
+      let res = pid === 'gemini'
+        ? await callGemini(model, key, system, user, 8000)
+        : await callOpenAiStyle(prov, model, key, system, user, 8000);
+      if (!res.ok && (res.status === 429 || res.status === 503)) {
+        const wait = res.status === 429 ? 8000 : 4000;
+        warn(prov.label + ' ' + model + ' · ' + res.error + ' · ' + Math.round(wait / 1000) + '초 뒤 한 번 더');
+        await sleep(wait);
+        res = pid === 'gemini'
+          ? await callGemini(model, key, system, user, 8000)
+          : await callOpenAiStyle(prov, model, key, system, user, 8000);
+      }
+      if (res.ok) {
+        const json = extractJson(res.text);
+        if (json && Array.isArray(json.headline) && Array.isArray(json.trends)) {
+          return { ok: true, data: json, provider: prov, model: model, ms: res.ms };
+        }
+        attempts.push(prov.label + '/' + model + ': 형식 아님');
+        warn('주간 결과를 읽지 못했어요 · ' + clip(res.text, 160));
+        continue;
+      }
+      attempts.push(prov.label + '/' + model + ': ' + res.error);
+      warn('주간 실패 · ' + prov.label + ' ' + model + ' · ' + res.error);
+      if (res.status === 401 || res.status === 403) break;
+      if (res.empty) { emptyCount++; if (emptyCount >= 2) break; }
+    }
+  }
+  return { ok: false, attempts: attempts };
+}
+function weeklyToText(w) {
+  const L = ['📅 ' + w.date + ' 금융권 DBA 주간 요약 (' + w.weekStart + ' ~ ' + w.weekEnd + ')'];
+  if (w.headline.length) { L.push(''); w.headline.forEach(function (h, i) { L.push((i + 1) + '. ' + h); }); }
+  for (const t of w.trends) {
+    L.push('');
+    L.push('[주간 트렌드] ' + t.title);
+    if (t.summary) L.push(t.summary);
+    for (const it of (t.items || [])) L.push('· ' + it.title + (it.url ? ' (' + it.url + ')' : ''));
+  }
+  if (w.changes.length) { L.push(''); L.push('[핵심 변화]'); for (const c of w.changes) L.push('· ' + c.area + ' — ' + c.what + (c.why ? ' / ' + c.why : '')); }
+  if (w.returnPrep.length) { L.push(''); L.push('[복귀 준비]'); for (const c of w.returnPrep) L.push('· (' + c.phase + ') ' + c.todo + (c.why ? ' — ' + c.why : '')); }
+  return L.join('\n');
+}
+async function makeWeekly(keys) {
+  const t0 = Date.now();
+  const days = lastDays(7);
+  const briefs = await readWeekBriefs(days);
+  const out = {
+    schema: 'dba-weekly-brief/1', date: TODAY, weekStart: days[0], weekEnd: days[days.length - 1],
+    generatedAt: nowIso(), timezone: 'Asia/Seoul', status: 'ok', model: '',
+    days: briefs.map(function (b) { return b.date; }),
+    headline: [], trends: [], changes: [], returnPrep: [], sources: [], elapsedSec: 0
+  };
+  if (briefs.length < 2) {
+    log('주간 요약 · 모은 데일리 브리핑이 ' + briefs.length + '일치라 건너뜁니다(2일 이상 필요).');
+    return { ok: false, skipped: true };
+  }
+  const ai = await runWeeklyAi(keys, buildWeeklySystemPrompt(), buildWeeklyPrompt(briefs, days));
+  if (ai.ok) {
+    const d = ai.data;
+    out.model = ai.provider.label + ' · ' + ai.model;
+    out.headline = (Array.isArray(d.headline) ? d.headline : []).filter(function (x) { return typeof x === 'string' && x.trim(); })
+      .slice(0, 3).map(function (x) { return clip(x, 120); });
+    out.trends = (Array.isArray(d.trends) ? d.trends : []).slice(0, 5).map(function (t) {
+      return {
+        title: clip((t && t.title) || '', 140),
+        summary: clip((t && t.summary) || '', 600),
+        items: (Array.isArray(t && t.items) ? t.items : []).slice(0, 6).map(function (it) {
+          return { title: clip((it && it.title) || '', 160), url: String((it && it.url) || ''), source: clip((it && it.source) || '', 60), published: String((it && it.published) || '') };
+        })
+      };
+    }).filter(function (t) { return !!t.title; });
+    out.changes = (Array.isArray(d.changes) ? d.changes : []).slice(0, 4).map(function (c) {
+      return { area: clip((c && c.area) || '', 80), what: clip((c && c.what) || '', 400), why: clip((c && c.why) || '', 300) };
+    });
+    out.returnPrep = (Array.isArray(d.returnPrep) ? d.returnPrep : []).slice(0, 4).map(function (c) {
+      return { phase: clip((c && c.phase) || '복귀 전', 20), todo: clip((c && c.todo) || '', 200), why: clip((c && c.why) || '', 200) };
+    });
+    out.sources = (Array.isArray(d.sources) ? d.sources : []).filter(function (s) { return s && s.url; }).slice(0, 30).map(function (s) {
+      return { title: clip(s.title || '', 160), url: String(s.url), source: clip(s.source || '', 60), published: String(s.published || '') };
+    });
+    log('주간 요약 완료 · ' + out.model + ' · 트렌드 ' + out.trends.length + '개');
+  } else {
+    out.status = 'feed-only';
+    console.log('::warning::주간 AI 요약에 모두 실패해 기사 목록만 남깁니다 · ' + (ai.attempts || []).join(' | '));
+    const seen = {};
+    for (const b of briefs) {
+      for (const sec of (Array.isArray(b.sections) ? b.sections : [])) {
+        for (const it of ((sec && sec.items) || [])) {
+          if (!it || !it.url || seen[it.url]) continue;
+          seen[it.url] = 1;
+          out.sources.push({ title: clip(it.title || '', 160), url: String(it.url), source: clip(it.source || '', 60), published: String(it.published || '') });
+        }
+      }
+    }
+    out.sources = out.sources.slice(0, 40);
+  }
+  out.elapsedSec = Math.round((Date.now() - t0) / 1000);
+  const txt = JSON.stringify(out, null, 2) + '\n';
+  writeLocal(P_OUT_DIR + '/weekly-' + TODAY + '.json', txt);
+  writeLocal(P_OUT_DIR + '/latest-weekly.json', txt);
+  log('주간 요약 저장 · ' + P_OUT_DIR + '/weekly-' + TODAY + '.json · latest-weekly.json');
+  if (!NO_OFFICE) {
+    const rec = await upsertOfficeRecord({
+      kind: 'weekly-brief', date: TODAY,
+      titleOverride: '📅 금융권 DBA 주간 요약 · ' + TODAY,
+      brief: '매주 월요일 09:40 KST 에 지난 7일 데일리 브리핑을 모아 만드는 주간 요약입니다. 핵심 변화·주간 트렌드·복귀 준비 체크를 정리했습니다.',
+      report: {
+        summary: clip((out.headline[0] || '금융권 DBA 주간 요약'), 120),
+        detail: trunc(weeklyToText(out), 3500),
+        next: [{ label: 'latest-weekly.json 확인 · 필요하면 피클에게 후속 정리 요청', teamId: '' }],
+        verdict: '', at: nowIso()
+      },
+      logs: ['데일리 ' + briefs.length + '일치', '주간 모델 ' + (out.model || '없음'), '주간 저장 · weekly-' + TODAY + '.json']
+    });
+    if (rec.ok) log('사무실 기록 · ' + rec.id + ' (주간)');
+    else warn('주간 사무실 기록 실패 · ' + rec.error);
+  }
+  return { ok: true, weekly: out };
+}
+
+/* ==================================================================
    사무실(office-state.json) 기록 — 리서치팀 완료 1건
    ================================================================== */
 async function upsertOfficeRecord(payload) {
@@ -1051,7 +1293,8 @@ async function upsertOfficeRecord(payload) {
     if (!state || !Array.isArray(state.work)) return { ok: false, error: '사무실 기록 구조가 달라요' };
 
     const now = nowIso();
-    const existing = state.work.filter(function (w) { return w && w.kind === 'daily-brief'; })[0] || null;
+    const recKind = String(payload.kind || 'daily-brief');
+    const existing = state.work.filter(function (w) { return w && w.kind === recKind; })[0] || null;
     let item;
     if (existing) {
       item = existing;
@@ -1060,7 +1303,7 @@ async function upsertOfficeRecord(payload) {
       item = { id: 'w' + state.seq, teamId: 'research', materialIds: [], parentId: '', log: [], at: now, secretary: null, code: null, error: '' };
       state.work.push(item);
     }
-    item.kind = 'daily-brief';
+    item.kind = recKind;
     item.briefDate = payload.date;
     item.title = clip(payload.titleOverride || ('📰 금융권 DBA 데일리 브리핑 · ' + payload.date), 80);
     item.brief = payload.brief;
@@ -1098,8 +1341,10 @@ async function main() {
   const t0 = Date.now();
   log('시작 · ' + NOW_LABEL + ' · 대상 ' + TODAY + (DRY ? ' · (미리보기)' : ''));
 
-  /* 1) 수집 */
-  const collected = await collectAll();
+  /* 1) 수집 — 최근 7일 브리핑에 실린 기사는 먼저 추려 둔다 */
+  const covered = await loadCovered7();
+  const collected = await collectAll(covered);
+  if (collected.skipped) log('7일 중복 제외 · ' + collected.skipped + '건');
   const prevUrls = await loadPreviousUrls();
   let prevCount = 0;
   for (const it of collected.items) { if (prevUrls[normUrl(it.url)]) { it.seen = true; prevCount++; } }
@@ -1244,6 +1489,12 @@ async function main() {
     });
     if (rec.ok) log('사무실 기록 · ' + rec.id + (rec.updated ? ' (갱신)' : ' (새로 만듦)'));
     else warn('사무실 기록 실패 · ' + rec.error);
+  }
+
+  /* 6) 주간 요약 — 매주 월요일(Asia/Seoul) 또는 --weekly */
+  if (kstParts().weekday === '월' || flag('weekly')) {
+    if (flag('no-weekly')) log('주간 요약 · --no-weekly 로 건너뜁니다.');
+    else await makeWeekly(loaded.keys);
   }
 
   log('끝 · ' + Math.round((Date.now() - t0) / 1000) + '초');
