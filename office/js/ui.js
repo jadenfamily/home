@@ -102,9 +102,12 @@ function teamCard(t) {
     var busy = false;
     for (var k = 0; k < work.length; k++) if (S.busy[work[k].id]) busy = true;
     var picoList = isPickleTeam(t) ? picoPendingFor(t.id) : [];
-    var picoN = picoList.length, picoRep = false;
-    for (var pi = 0; pi < picoList.length; pi++) if (picoList[pi].picoStatus === 'report') picoRep = true;
-    var statusTxt = picoN ? (picoRep ? '피클 보고 대기' : '피클 확인 대기') : STATUS_LABEL[st];
+    var picoN = picoList.length, picoRep = false, picoRev = false;
+    for (var pi = 0; pi < picoList.length; pi++) {
+      if (picoList[pi].picoStatus === 'report') picoRep = true;
+      if (picoList[pi].picoStatus === 'step_review') picoRev = true;
+    }
+    var statusTxt = picoN ? (picoRev ? '피클 검수 대기' : (picoRep ? '피클 보고 대기' : '피클 확인 대기')) : STATUS_LABEL[st];
     var foot = '<span class="tc-foot"><span class="status ' + st + (picoN ? ' pickle' : '') + '"><i></i>' + esc(statusTxt) + '</span>' +
       '<span class="tc-n">' + (picoN ? '피클 확인 <b>' + picoN + '</b>' : (openN ? '결재 <b>' + openN + '</b>' : (doneN ? '완료 ' + doneN : (busy ? '일하는 중' : '')))) + '</span></span>';
     /* 1F 전담 비서 피클 — 모델 뱃지 대신 피클 이름과 역할을 보여 줘요 */
@@ -138,7 +141,7 @@ function apMini(w) {
     }
     var team = teamById(w.teamId) || secretaryTeam();
     var sub = w.kind === 'delegation'
-      ? ('비서 ' + (w.phase === 'report' ? '최종 취합 보고' : '배분 계획') + ' · ' + ((w.delegationPlan || []).length) + '개 팀 · ' + whenLabel(w.updatedAt))
+      ? ('비서 ' + (w.phase === 'step_review' ? '중간 검수' : (w.phase === 'report' ? '최종 취합 보고' : '배분 계획')) + ' · ' + ((w.delegationPlan || []).length) + '개 팀 · ' + whenLabel(w.updatedAt))
       : (team.name + ' · 비서 정리 보고 · ' + whenLabel(w.updatedAt));
     return '<div class="ap-mini">' +
       '<span class="am-ic">' + esc(team.emoji || '📄') + '</span>' +
@@ -169,6 +172,16 @@ function renderOffice() {
       if (wait.length > 3) h += '<p class="empty">외 ' + (wait.length - 3) + '건은 결재함에서 볼 수 있어요.</p>';
     } else {
       h += '<p class="empty">비서가 올린 정리 보고가 여기에 쌓여요. 아직 결재할 일이 없어요.</p>';
+    }
+    var revs5 = reviewList();
+    if (revs5.length) {
+      h += '<p class="empty" style="margin-top:8px">🥒 피클이 검수 중인 일 · ' + revs5.length + '건 (대표님 승인 없이 이어서 진행해요)</p>';
+      for (var rv = 0; rv < Math.min(revs5.length, 3); rv++) {
+        var rvi = revs5[rv], rsr = rvi.stepReview || {};
+        h += '<div class="ap-mini" data-act="open-work-detail" data-id="' + esc(rvi.id) + '"><span class="am-ic">🥒</span>' +
+          '<span class="am-body"><b class="am-title">' + esc(rvi.title) + '</b>' +
+          '<span class="am-sub">' + esc('피클 중간 검수 · ' + (rsr.stepNo || 1) + '/' + (rsr.totalSteps || ((rvi.childIds || []).length)) + '단계 · 다음 ' + (rsr.nextTeamName || '마감') + ' · ' + whenLabel(rvi.updatedAt)) + '</span></span></div>';
+      }
     }
     h += '</section>';
 
@@ -372,6 +385,10 @@ function pipelineLine(sec) {
       }
     }
     var now = idx ? idx : Math.min(done + 1, n);
+    if (sec && sec.phase === 'step_review') {
+      return '<p class="tm-note">' + done + '/' + n + '단계 끝남 · 피클이 결과를 보고 다음 팀으로 넘겨요' +
+        (curName ? ' (다음 · ' + esc(curName) + ')' : '') + '</p>';
+    }
     return '<p class="tm-note">팀에 순서대로 전달 중 · ' + now + '/' + n + '번째' +
       (curName ? ' · ' + esc(curName) + ' 진행 중' : '') + ' · 끝난 팀 ' + done + '</p>';
 }
@@ -393,7 +410,7 @@ function apDelegationCard(item) {
     var phase = item.phase || 'plan';
     var kids = secChildList(item);
     var sec = item.secretary || {};
-    var headTxt = phase === 'report' ? '비서 최종 취합 보고' : ((phase === 'run' || phase === 'collect') ? '비서 배분 실행 중' : '비서 배분 계획');
+    var headTxt = phase === 'report' ? '비서 최종 취합 보고' : (phase === 'step_review' ? '피클 중간 검수' : ((phase === 'run' || phase === 'collect') ? '비서 배분 실행 중' : '비서 배분 계획'));
     var h = '<div class="ap-card delegation' + (item.status === 'approved' ? ' approved' : (item.status === 'rejected' ? ' rejected' : '')) + '" data-work="' + esc(item.id) + '">';
     h += '<div class="ap-h"><span>🗒️ ' + esc(headTxt) + '</span><span class="who">· 비서</span><span class="when">' + esc(whenLabel(item.updatedAt)) + '</span></div>';
     h += '<div class="ap-t">' + esc(item.title) + '</div>';
@@ -407,7 +424,18 @@ function apDelegationCard(item) {
             '<span>' + esc(clip(plan[i].prompt, 260)) + '</span></div></li>';
         }
         h += '</ol>';
-        h += '<p class="tm-note">승인하면 비서가 이 순서대로 팀에 전달하고, 모든 팀이 끝나면 결과를 하나로 취합해 다시 결재함에 올려요.</p>';
+        h += '<p class="tm-note">승인은 이 한 번만 — 그 뒤에는 피클이 단계마다 검수하며 팀을 끝까지 진행하고, 결과만 결재함에 올려요. (인증·저장 구조처럼 여파가 큰 변경만 자동 반영하지 않고 다시 확인을 받아요.)</p>';
+      }
+    } else if (phase === 'step_review') {
+      var sr = item.stepReview || {};
+      h += '<div class="ap-sum">' + esc((sr.failed ? '⚠ ' : '') + (sr.teamName || '팀') + ' 단계가 끝났어요 · ' + (sr.stepNo || 1) + '/' + (sr.totalSteps || (item.childIds || []).length) + '단계') + '</div>';
+      if (sr.summary) h += '<div class="ap-sum">' + esc(clip(String(sr.summary), 400)) + '</div>';
+      if (sr.hasCode) h += '<div class="codemeta"><span>' + esc('수정안 · ' + fileLabel((sr.code && sr.code.repo) || '', (sr.code && sr.code.path) || '')) + '</span><span class="' + ((sr.code && sr.code.checkOk) ? 'ok' : 'bad') + '">' + ((sr.code && sr.code.checkOk) ? '자동 검사 통과' : '자동 검사 문제') + '</span><span>아직 반영 전</span></div>';
+      h += '<p class="tm-note">피클이 이 결과를 검수해 다음 팀(' + esc(sr.nextTeamName || '마감') + ')으로 넘기면 이어서 진행해요. 대표님이 따로 승인하지 않아도 돼요.</p>';
+      if (kids.length) {
+        h += '<div class="tm-list" style="margin-top:7px">';
+        for (var sr2 = 0; sr2 < kids.length; sr2++) h += childRow(kids[sr2]);
+        h += '</div>';
       }
     } else if (phase === 'run' || phase === 'collect') {
       h += '<div class="ap-sum">' + esc(sec.summary || '배분 계획대로 팀에 순서대로 전달하고 있어요.') + '</div>';
@@ -435,6 +463,14 @@ function apDelegationCard(item) {
         h += '</ul>';
       }
       if (sec.recommend) h += '<div class="ap-rec">추천: ' + esc(sec.recommend) + '</div>';
+      if (item.autoCommit && item.autoCommit.ok) {
+        h += '<div class="ap-rec" style="background:#eef9f1;color:#2f6b45;border:1px solid #cfe8d8">✅ QC를 통과해 자동으로 반영했어요 · ' + esc(fileLabel(item.autoCommit.repo || '', item.autoCommit.path || '')) + '</div>';
+      } else if (item.highRisk) {
+        h += '<div class="ap-rec" style="background:#fff4e5;color:#8a5a00;border:1px solid #f0dcc0">⚠️ 여파가 큰 변경이라 자동으로 반영하지 않았어요 · ' + esc(clip(item.riskReason || '', 200)) + '</div>';
+      } else if (item.autoCommit && item.autoCommit.ok === false) {
+        h += '<div class="ap-rec" style="background:#fff1f2;color:#c14160">자동 반영하지 못했어요 · ' + esc(clip(item.autoCommit.error || '', 160)) +
+          (item.autoCommit.noToken ? ' — 사무실 ⚙️ 설정 → 코드 열쇠를 넣으면 다음부터 자동 반영돼요' : '') + '</div>';
+      }
     }
     if (item.report && item.report.detail) {
       var dk = 'd_' + item.id;
@@ -481,6 +517,12 @@ function apDelegationCard(item) {
           '<div class="btn-line" style="margin-top:6px"><button class="btn warn" type="button" data-act="reject" data-id="' + esc(item.id) + '">반려하고 다시 계획</button>' +
           '<button class="btn danger" type="button" data-act="reject-delete" data-id="' + esc(item.id) + '">반려 후 삭제</button>' +
           '<button class="btn ghost" type="button" data-act="reject-cancel" data-id="' + esc(item.id) + '">취소</button></div></div>';
+      }
+    } else if (item.status === 'done') {
+      if (item.commit && item.commit.ok) {
+        h += '<div class="ap-rec" style="background:#eef9f1;color:#2f6b45;border:1px solid #cfe8d8">✅ QC 검수를 통과해 코드에 반영했어요 · ' + esc(fileLabel(item.commit.repo || '', item.commit.path || '')) + '</div>';
+      } else {
+        h += '<div class="ap-rec">마무리된 일이에요 · 최근 마무리에서 볼 수 있어요.</div>';
       }
     } else if (item.status === 'approved') {
       if (item.commit) {
@@ -554,6 +596,11 @@ function paneApprove() {
         '<button class="btn-s danger" type="button" data-act="delete-work" data-id="' + esc(fw.id) + '">삭제</button></div></div>';
     }
     for (var i = wait.length - 1; i >= 0; i--) h += apCard(wait[i]);
+    var revs = reviewList();
+    if (revs.length) {
+      h += '<div class="gtitle" style="display:flex;font-size:11px;font-weight:900;color:#8d849f;margin:10px 0 6px">🥒 피클이 검수 중 · ' + revs.length + '</div>';
+      for (var rv2 = 0; rv2 < revs.length; rv2++) h += apCard(revs[rv2]);
+    }
     if (next.length) {
       h += '<div class="gtitle" style="display:flex;font-size:11px;font-weight:900;color:#8d849f;margin:10px 0 6px">승인한 일 · 다음 단계</div>';
       for (var k = 0; k < next.length; k++) h += apCard(next[k]);

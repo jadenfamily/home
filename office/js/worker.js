@@ -47,8 +47,10 @@ async function dispatchWorker(workId) {
 }
 function isLiveWork(w) {
     if (!w) return false;
-    /* 피클이 직접 맡은 일(확인·취합 보고 대기)은 외부 일꾼·자동 중단 대상이 아니에요 */
+    /* 피클이 직접 맡은 일(확인·검수·보고 대기)과 그 아래 대기 중인 팀 일은
+       외부 일꾼·자동 중단 대상이 아니에요 */
     if (picoPending(w)) return false;
+    if (underStepReview(w)) return false;
     if (w.status === 'working' || w.status === 'queued') return true;
     if (w.kind === 'delegation' && w.status === 'approved' && (w.phase === 'run' || w.phase === 'collect')) return true;
     return false;
@@ -345,6 +347,8 @@ function rerunWork(id) {
           c.cancelRequested = false;
           if (c.status === 'failed' || c.status === 'working') { c.status = 'queued'; c.error = ''; }
         }
+        /* 피클 중간 검수 대기였으면 검수를 마친 것으로 표시하고 다음 단계부터 이어요 */
+        if (w.picoStatus === 'step_review') { w.picoStatus = 'resumed'; w.picoReviewAt = nowIso(); }
         w.status = 'approved';
         w.phase = 'run';
         pushLog(w, '다시 실행 · 남은 팀부터 이어서');

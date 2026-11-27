@@ -32,6 +32,19 @@ var PROVIDERS = {
     }
 };
 var PROVIDER_ORDER = ['gemini', 'openrouter', 'groq'];
+/* 코딩·추론 팀(개발·QC)은 OpenRouter·Groq의 코딩 모델을 먼저 쓰고
+   그쪽이 모두 한도·오류일 때만 Gemini를 맨 마지막 폴백으로 써요. (2026-11-27 대표님 지시) */
+var CODE_PROVIDER_ORDER = ['openrouter', 'groq', 'gemini'];
+var CODE_MODEL_ORDER = {
+    openrouter: ['deepseek/deepseek-chat-v3.1:free', 'qwen/qwen3-235b-a22b:free', 'meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'],
+    groq: ['openai/gpt-oss-120b', 'qwen/qwen3-32b', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
+    gemini: ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-4-hydrogen', 'gemini-3.5-flash-lite']
+};
+var CODE_MODELS_PER_PROVIDER = 2;
+function isCodeTeam(team) {
+    var id = String((team && team.id) || '');
+    return id === 'dev' || id === 'qc';
+}
 
 function providerKey(pid) {
     var l = (S.ai && S.ai.keys && S.ai.keys[pid]) || [];
@@ -180,6 +193,43 @@ function defaultModelId() {
       return modelIdOf(pid, list[0]);
     }
     return modelIdOf('gemini', PROVIDERS.gemini.models[0]);
+}
+/* 한 제공자의 모델을 쓸 순서대로 — 코딩 팀이면 코딩·추론 모델을 앞에 둬요 */
+function orderedModelsFor(pid, coding) {
+    var list = modelList(pid);
+    if (!coding) return list;
+    var want = CODE_MODEL_ORDER[pid] || [], out = [];
+    for (var i = 0; i < want.length; i++) if (list.indexOf(want[i]) >= 0 && out.indexOf(want[i]) < 0) out.push(want[i]);
+    for (var k = 0; k < list.length; k++) if (out.indexOf(list[k]) < 0) out.push(list[k]);
+    return out;
+}
+/* 이번 호출에서 시도할 모델 순서 — startId(지금 쓰는 모델) 다음에 폴백이 이어져요 */
+function modelChainFor(team, startId) {
+    var coding = isCodeTeam(team);
+    var order = coding ? CODE_PROVIDER_ORDER : PROVIDER_ORDER;
+    var out = [];
+    function add(pid, model) {
+      if (!pid || !PROVIDERS[pid] || !hasKey(pid)) return;
+      if (!model || NON_CHAT_MODEL_RE.test(String(model))) return;
+      if (modelList(pid).indexOf(model) < 0) return;
+      var id = modelIdOf(pid, model);
+      if (isDeadModel(id) || noToolsModel(id) || out.indexOf(id) >= 0) return;
+      out.push(id);
+    }
+    var sp0 = splitModelId(startId);
+    if (startId) add(sp0.pid, sp0.model);
+    for (var i = 0; i < order.length; i++) {
+      var pid = order[i];
+      if (!PROVIDERS[pid] || !hasKey(pid)) continue;
+      var seq = orderedModelsFor(pid, coding);
+      var limit = (coding && pid !== 'gemini') ? CODE_MODELS_PER_PROVIDER : seq.length;
+      for (var k = 0; k < seq.length && k < limit; k++) add(pid, seq[k]);
+    }
+    return out;
+}
+function codeDefaultModelId() {
+    var chain = modelChainFor({ id: 'dev' }, '');
+    return chain.length ? chain[0] : defaultModelId();
 }
 function currentModel() { return defaultModelId(); }
 

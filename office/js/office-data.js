@@ -97,6 +97,8 @@ function secretaryTeam() {
 function teamModelId(team) {
     var pid = String((team && team.pid) || ''), model = String((team && team.model) || '');
     if (pid && PROVIDERS[pid] && model && !isDeadModel(modelIdOf(pid, model)) && modelList(pid).indexOf(model) >= 0) return modelIdOf(pid, model);
+    /* 개발·QC는 OpenRouter·Groq의 코딩 모델을 먼저, Gemini는 맨 마지막 폴백 */
+    if (isCodeTeam(team)) return codeDefaultModelId();
     return defaultModelId();
 }
 function workById(id) {
@@ -113,7 +115,7 @@ function teamStatus(teamId) {
     var list = workFor(teamId);
     for (var i = 0; i < list.length; i++) {
       var w0 = list[i];
-      if (w0.status === 'working' || w0.status === 'queued') return 'working';
+      if ((w0.status === 'working' || w0.status === 'queued') && !underStepReview(w0)) return 'working';
       if (w0.kind === 'delegation' && w0.status === 'approved' && w0.phase === 'run') return 'working';
     }
     for (var j = 0; j < list.length; j++) if (list[j].status === 'waiting') return 'waiting';
@@ -144,10 +146,32 @@ function waitingList() {
     for (var i = 0; i < list.length; i++) if (list[i].status === 'waiting') out.push(list[i]);
     return out;
 }
+/* 단계가 끝나 피클 중간 검수를 기다리는 일 (대표님 승인을 기다리는 건 아니에요) */
+function reviewList() {
+    var out = [], list = (S.office && S.office.work) || [];
+    for (var i = list.length - 1; i >= 0; i--) {
+      var w = list[i];
+      if (!w) continue;
+      if (w.status !== 'working') continue;
+      if (w.phase === 'step_review') out.push(w);
+    }
+    return out;
+}
 function workingList() {
     var out = [], list = (S.office && S.office.work) || [];
-    for (var i = 0; i < list.length; i++) if (list[i].status === 'working') out.push(list[i]);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].status !== 'working') continue;
+      if (picoPending(list[i]) || underStepReview(list[i])) continue;
+      out.push(list[i]);
+    }
     return out;
+}
+/* 피클 중간 검수를 기다리는 단계의 자식 일인지 (앞 단계 결과를 피클이 보고 있는 중) */
+function underStepReview(w) {
+    var pid = String((w && (w.secId || w.parentId)) || '');
+    if (!pid) return false;
+    var p = workById(pid);
+    return !!(p && p.phase === 'step_review');
 }
 function nextStepList() {
     var out = [], list = (S.office && S.office.work) || [];
@@ -160,7 +184,9 @@ function finishedList() {
     var out = [], list = (S.office && S.office.work) || [];
     for (var i = list.length - 1; i >= 0 && out.length < 4; i--) {
       var w = list[i];
-      if (w.status !== 'approved' || !w.nextDone) continue;
+      /* 자동 반영으로 마무리된 일(done·nextDone)도 '최근 마무리'에 보여요 */
+      if (!(w.status === 'approved' || (w.status === 'done' && w.nextDone))) continue;
+      if (!w.nextDone) continue;
       /* 코드 수정·실제 결과물이 필요한 일은 실제 반영(커밋)까지 가야 '마무리'예요 */
       if (!delivered(w)) continue;
       out.push(w);
@@ -180,13 +206,16 @@ function failedList() {
 
 /* ---------- 1F 비서실 = 전담 비서 피클 (외부 AI 일꾼을 부르지 않아요) ---------- */
 function isPicoWork(w) { return !!(w && w.secOwner === 'pico'); }
-/* 피클이 아직 손대기 전(확인 대기)이거나, 피클 보고를 기다리는 중 */
-function picoPending(w) { return isPicoWork(w) && (w.picoStatus === 'pending' || w.picoStatus === 'report' || w.picoStatus === 'collect'); }
+/* 피클이 아직 손대기 전(확인 대기)이거나, 팀 단계 결과를 검수하는 중, 보고를 기다리는 중 */
+function picoPending(w) { return isPicoWork(w) && (w.picoStatus === 'pending' || w.picoStatus === 'report' || w.picoStatus === 'collect' || w.picoStatus === 'step_review'); }
 function picoLabel(w) {
     if (!isPicoWork(w)) return '';
     if (w.picoStatus === 'pending') return '비서 피클 확인 대기';
+    if (w.picoStatus === 'step_review') return '피클 중간 검수 대기';
     if (w.picoStatus === 'report') return '피클 최종 취합 보고 대기';
     if (w.picoStatus === 'working') return '피클 작업 중';
+    if (w.picoStatus === 'resumed') return '피클 검수 완료 · 다음 팀 진행';
+    if (w.picoStatus === 'planned') return '피클 계획 완료 · 승인 대기';
     if (w.picoStatus === 'done') return '피클 보고 완료';
     return '피클 담당';
 }

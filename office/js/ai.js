@@ -29,45 +29,38 @@ function errShort(res) {
     return String(res.error || ('HTTP ' + res.status));
 }
 async function officeCall(team, system, messages, opts) {
-    var id = teamModelId(team);
-    var sp = splitModelId(id);
-    var pid = (sp.pid && PROVIDERS[sp.pid]) ? sp.pid : 'gemini';
-    var model = sp.model || modelList(pid)[0];
+    var id0 = teamModelId(team);
+    var chain = modelChainFor(team, id0);
     var onStep = opts && opts.onStep ? opts.onStep : null;
-    if (!hasKey(pid)) return { ok: false, status: 0, error: PROVIDERS[pid].label + ' 키가 아직 없어요. ⚙️ 설정에서 무료 키를 넣어 주세요.' };
+    var maxTokens = (opts && opts.maxTokens) || 2600;
+    if (!chain.length) {
+      var sp0 = splitModelId(id0);
+      var p0 = PROVIDERS[sp0.pid] || PROVIDERS.gemini;
+      return { ok: false, status: 0, error: p0.label + ' 키가 아직 없어요. ⚙️ 설정에서 무료 키를 넣어 주세요.' };
+    }
     var tools = toolsForTeam(team.id);
-    var tried = {}, switched = 0;
-    tried[id] = 1;
     var saved = TOOLS;
     TOOLS = tools;
     try {
-      var res = await callWithKeys(pid, model, { system: system, messages: messages }, { maxTokens: (opts && opts.maxTokens) || 2600 });
-      /* 단종·없어진 모델이면 목록에서 숨기고 바로 쓸 수 있는 모델로 한 번 더 */
-      if (res && !res.ok && isDeadModelError(res.status, res.error)) {
-        markDeadModel(id, res.error);
-        var deadAlt = nextUsableModel(id);
-        if (deadAlt) {
-          var dsp = splitModelId(deadAlt);
-          tried[deadAlt] = 1;
-          pid = dsp.pid; model = dsp.model; id = deadAlt;
-          toast('이 모델은 더 이상 쓸 수 없어 ' + modelShort(deadAlt) + '(으)로 이어서 해요.');
-          if (onStep) onStep('모델 전환 · ' + modelShort(deadAlt));
-          res = await callWithKeys(pid, model, { system: system, messages: messages }, { maxTokens: (opts && opts.maxTokens) || 2600 });
+      var res = null;
+      for (var i = 0; i < chain.length; i++) {
+        var id = chain[i], sp = splitModelId(id);
+        res = await callWithKeys(sp.pid, sp.model, { system: system, messages: messages }, { maxTokens: maxTokens });
+        if (res && res.ok) return res;
+        /* 단종·없어진 모델이면 목록에서 숨기고 다음 모델로 */
+        if (res && isDeadModelError(res.status, res.error)) {
+          markDeadModel(id, res.error);
+          if (i + 1 < chain.length && onStep) onStep('모델 전환 · ' + modelShort(chain[i + 1]));
+          continue;
         }
-      }
-      while (res && !res.ok && (res.status === 429 || res.status === 503)) {
-        var alt = busyFallbackModel(id, tried);
-        if (!alt || switched >= 4) break;
-        var bsp = splitModelId(alt);
-        tried[alt] = 1;
-        switched++;
-        var fromShort = modelShort(id);
-        pid = bsp.pid;
-        model = bsp.model;
-        id = alt;
-        toast(fromShort + ' 한도/혼잡 → ' + modelShort(alt) + '(으)로 이어서 보내요.');
-        if (onStep) onStep('모델 전환 · ' + fromShort + ' → ' + modelShort(alt) + ' (한도·혼잡)');
-        res = await callWithKeys(pid, model, { system: system, messages: messages }, { maxTokens: (opts && opts.maxTokens) || 2600 });
+        /* 한도·혼잡 → 다음 모델로 */
+        if (res && (res.status === 429 || res.status === 503)) {
+          if (i + 1 >= chain.length) break;
+          toast(modelShort(id) + ' 한도/혼잡 → ' + modelShort(chain[i + 1]) + '(으)로 이어서 보내요.');
+          if (onStep) onStep('모델 전환 · ' + modelShort(id) + ' → ' + modelShort(chain[i + 1]) + ' (한도·혼잡)');
+          continue;
+        }
+        break;
       }
       return res;
     } finally {
@@ -78,11 +71,12 @@ async function officeCall(team, system, messages, opts) {
 /* ---------- 팀 지시문 ---------- */
 var MODULE_RULES = [
     '[AI 사무실 공통 작업 규칙 — 무엇보다 먼저 지킨다]',
-    '1. 작업 전 설명·컨펌: 바로 적용하지 않는다. 계획·수정안을 먼저 올려 대표님 승인을 받은 뒤에만 실제 코드에 반영한다.',
-    '2. 시안·요청 1:1 반영: 화면·UI·캐릭터 변경은 확정된 시안과 요청 그대로 실제 화면에 빠짐없이 반영한다. 임의로 바꾸지 않는다.',
-    '3. 모듈 분리·추후 수정 가능: 모든 코드는 기능별 모듈(js/*.js, css/*.css)로 분리해 유지하고 한 파일에 몰아넣지 않는다. 새로 추가한 항목·기능도 사용자가 나중에 직접 수정·추가·삭제할 수 있게 만든다.',
-    '4. 내부 기술 문구 비노출: 가족이 보는 화면에는 GitHub, localStorage, 저장소 경로 같은 내부 개발·기술 용어를 절대 노출하지 않는다.',
-    '5. 완전 완료·재처리: 중간 이슈가 나면 먼저 자동 재처리(재시도·다시 요청)까지 시도하고 그래도 안 될 때만 보고한다. 실제 코드 반영과 검증이 끝났을 때만 완료로 처리한다.'
+    '1. 승인은 처음 한 번: 대표님 승인은 착수(배분 계획) 승인 1회다. 그 뒤로는 피클이 단계마다 중간 검수하며 끝까지 진행하고, 대표님은 결과 보고만 본다. 다만 인증·로그인·암호화·키 관리, 데이터 저장 구조·스키마, 여러 파일을 크게 고치거나 지우는 일처럼 여파가 큰 변경만 자동 반영하지 않고 다시 승인을 받는다.',
+    '2. 작업 전 설명·컨펌: 코드에 바로 적용하지 않는다. 계획·수정안을 먼저 만들고, 실제 반영은 QC 검수를 지난 뒤 사무실이 한다.',
+    '3. 시안·요청 1:1 반영: 화면·UI·캐릭터 변경은 확정된 시안과 요청 그대로 실제 화면에 빠짐없이 반영한다. 임의로 바꾸지 않는다.',
+    '4. 모듈 분리·추후 수정 가능: 모든 코드는 기능별 모듈(js/*.js, css/*.css)로 분리해 유지하고 한 파일에 몰아넣지 않는다. 새로 추가한 항목·기능도 사용자가 나중에 직접 수정·추가·삭제할 수 있게 만든다.',
+    '5. 내부 기술 문구 비노출: 가족이 보는 화면에는 GitHub, localStorage, 저장소 경로 같은 내부 개발·기술 용어를 절대 노출하지 않는다.',
+    '6. 완전 완료·재처리: 중간 이슈가 나면 먼저 자동 재처리(재시도·다시 요청)까지 시도하고 그래도 안 될 때만 보고한다. 실제 코드 반영과 검증이 끝났을 때만 완료로 처리한다.'
 ];
 function officeFacts() {
     var d = new Date();
@@ -109,7 +103,8 @@ function buildTeamSystem(team) {
     lines.push(officeFacts());
     lines.push('');
     lines.push('[사무실 규칙]');
-    lines.push('- 대표님 승인 없이는 아무것도 최종 반영되지 않는다. 코드 수정은 code_edit로 "수정안"만 만들고, 실제 반영은 대표님 승인과 QC 검수를 거쳐 사무실이 실행한다.');
+    lines.push('- 대표님 승인은 처음 착수 승인 1회뿐이다. 그 뒤로는 피클이 단계마다 중간 검수하며 다음 팀으로 넘기고, 대표님은 끝난 결과만 본다.');
+    lines.push('- 코드 수정은 code_edit로 "수정안"만 만든다. QC를 통과한 저·중위험 수정안은 사무실이 자동으로 반영하고, 인증·로그인·암호화·키·저장 구조·대규모 변경처럼 여파가 큰 것만 대표님 최종 승인을 받는다.');
     lines.push('- 코드·데이터는 반드시 읽기 도구로 실제 내용을 확인하고 쓴다. 짐작으로 파일 이름·줄·함수를 쓰지 않는다.');
     lines.push('- "찾아볼게요"처럼 말만 하고 끝내지 않는다. 바로 도구를 불러 확인한다. 도구 결과가 오면 같은 도구를 또 부르지 말고 그 결과로 정리한다.');
     lines.push('- 도구를 부르는 중간 턴에는 완료 보고를 쓰지 않는다. 마지막 답변에서만 실제 결과대로 쓴다.');
@@ -137,8 +132,10 @@ function buildTeamSystem(team) {
     }
     if (team.id === 'qc') {
       lines.push('[QC팀으로 일하는 법]');
-      lines.push('- 넘겨받은 수정안의 변경 구간을 보고, 문법·구조·기존 기능에 미치는 영향을 본다. 필요하면 code_read·read_code_slice로 원본을 직접 확인한다.');
-      lines.push('- 판단은 summary 첫 줄에 "검수 통과" 또는 "문제 있음"으로 분명히 적는다. 문제가 있으면 어떤 줄에서 무엇이 문제인지, 어떻게 고쳐야 하는지 적는다.');
+      lines.push('- 넘겨받은 수정안의 변경 구간(찾을 글자 → 바꿀 글자)을 보고, 문법·구조·기존 기능에 미치는 영향을 본다. 필요하면 code_read·read_code_slice로 원본을 직접 확인한다.');
+      lines.push('- 판단은 summary 첫 줄에 "검수 통과" 또는 "문제 있음"으로 분명히 적고, 보고 json에 "verdict":"통과" 또는 "문제"를 넣는다.');
+      lines.push('- 문제가 있으면 어떤 줄에서 무엇이 문제인지, 어떻게 고쳐야 하는지 적는다. 사소한 표현 차이로 통과를 막지 않는다.');
+      lines.push('- 인증·로그인·암호화·키 관리, 데이터 저장 구조·스키마, 여러 파일 대규모 수정처럼 여파가 큰 변경을 발견하면 verdict는 "문제"로 적고 보고에 "여파 큼"이라고 분명히 쓴다.');
       lines.push('');
     }
     if (team.id === 'cs') {
@@ -188,6 +185,47 @@ function materialText(item) {
     }
     return out.join('\n\n');
 }
+/* QC가 실제 변경 내용을 보고 검수하도록 수정안을 그대로 넣어 줘요 */
+function codeReviewText(code) {
+    if (!code) return '';
+    var lines = [];
+    lines.push('[검수할 코드 수정안] — 개발팀이 만든 실제 수정안이에요. 이 내용을 보고 검수한다.');
+    lines.push('- 저장소: ' + String(code.repo || ''));
+    lines.push('- 파일: ' + String(code.path || ''));
+    lines.push('- 변경 요약: ' + clip(code.summary || code.patchNote || '(요약 없음)', 800));
+    lines.push('- 규모: +' + (code.added || 0) + ' −' + (code.removed || 0) + '줄 · 바뀐 구간 ' + ((code.edits || []).length) + '개');
+    lines.push('- 자동 검사: ' + (code.checkOk ? '통과 (문법·구조 검사)' : '문제 있음 · ' + clip((code.checkErrors || []).join(' / '), 600)));
+    var edits = Object.prototype.toString.call(code.edits) === '[object Array]' ? code.edits : [];
+    for (var i = 0; i < edits.length && i < 8; i++) {
+      var e = edits[i] || {};
+      lines.push('');
+      lines.push('(' + (i + 1) + ') 찾을 글자(old_string)');
+      lines.push('```');
+      lines.push(clip(String(e.old_string == null ? '' : e.old_string), 1600));
+      lines.push('```');
+      lines.push('(' + (i + 1) + ') 바꿀 글자(new_string)');
+      lines.push('```');
+      lines.push(clip(String(e.new_string == null ? '' : e.new_string), 1600));
+      lines.push('```');
+    }
+    if (!edits.length && code.content != null) {
+      lines.push('');
+      lines.push('[바뀐 파일 전체]');
+      lines.push('```');
+      lines.push(clip(String(code.content), 5000));
+      lines.push('```');
+    }
+    if (code.diffText) {
+      lines.push('');
+      lines.push('[줄 비교]');
+      lines.push('```diff');
+      lines.push(clip(String(code.diffText), 5000));
+      lines.push('```');
+    }
+    lines.push('');
+    lines.push('확인할 것: 1) 바꿀 글자가 실제 파일에 그대로 있는지 2) 문법·구조가 깨지지 않는지 3) 기존 기능에 영향이 없는지 4) 여파가 큰 변경(인증·저장 구조·대규모)인지.');
+    return lines.join('\n');
+}
 function buildTeamInput(item, team) {
     var lines = [];
     lines.push('[맡긴 일] ' + item.title);
@@ -200,7 +238,10 @@ function buildTeamInput(item, team) {
       lines.push('[넘겨받은 자료]');
       lines.push(mats);
     }
-    if (item.code) {
+    if (team.id === 'qc' && (item.codeUnderReview || item.code)) {
+      lines.push('');
+      lines.push(codeReviewText(item.codeUnderReview || item.code));
+    } else if (item.code) {
       lines.push('');
       lines.push('[이미 만든 수정안]');
       lines.push(item.code.repo + '/' + item.code.path + ' — ' + clip(item.code.patchNote || '', 300));

@@ -291,6 +291,97 @@ function secChildList(sec) {
     }
     return out;
 }
+/* 다음에 실행할 단계 — 가장 앞선 미완료(queued·working) 자식 하나 */
+function nextChildStep(ids) {
+    for (var i = 0; i < (ids || []).length; i++) {
+      var c = workById(ids[i]);
+      if (!c) continue;
+      if (isPicoWork(c)) continue;
+      if (c.status === 'queued' || c.status === 'working' || c.status === 'stopping') return i;
+    }
+    return -1;
+}
+/* QC를 통과한 저·중위험 수정안은 대표님 추가 승인 없이 바로 반영해요 (일꾼과 같은 규칙) */
+var HIGH_RISK_FILES = ['sync.js', 'state.js', 'settings.js', 'crypto.js', 'gate.js', 'keys.js', 'totp.js', 'webauthn.js', 'providers.js', 'worker.js', 'worker.mjs', 'secretary.js', 'office-state.json', 'inbox.json', 'ai.json', 'settings.json', 'config.json', 'manifest.json'];
+var HIGH_RISK_DIR_RE = /(^|\/)(\.github|config|ai-office|backups)\//i;
+var HIGH_RISK_TEXT_RE = /(로그인|비밀번호|패스워드|암호화?|복호화?|인증|키\s*관리|토큰|스키마|마이그레이션|데이터\s*(구조|저장)|저장\s*구조|전체\s*(교체|수정|삭제|초기화)|초기화|권한|계정\s*삭제|지우|삭제)/;
+function riskOfChangeLocal(sec, code, kids) {
+    var reasons = [];
+    var p = String((code && code.path) || ''), base = p.split('/').pop();
+    if (base && HIGH_RISK_FILES.indexOf(base) >= 0) reasons.push('여파가 큰 파일(' + base + ')');
+    if (p && HIGH_RISK_DIR_RE.test(p)) reasons.push('설정·자동화 폴더(' + p + ')');
+    var edits = Object.prototype.toString.call(code && code.edits) === '[object Array]' ? code.edits : [];
+    if (edits.length > 6) reasons.push('바꾼 곳이 ' + edits.length + '군데로 많음');
+    var lines = (Number(code && code.added) || 0) + (Number(code && code.removed) || 0);
+    if (lines > 120) reasons.push('바뀐 줄이 ' + lines + '줄로 많음');
+    var textAll = String((sec && sec.title) || '') + ' ' + String((sec && sec.brief) || '');
+    for (var i = 0; i < (kids || []).length; i++) textAll += ' ' + String((kids[i] && kids[i].title) || '') + ' ' + String((kids[i] && kids[i].brief) || '');
+    var hit = textAll.match(HIGH_RISK_TEXT_RE);
+    if (hit) reasons.push('지시에 "' + hit[1] + '" 관련 변경');
+    return { high: reasons.length > 0, reasons: reasons };
+}
+function qcProblemLocal(qc) {
+    if (!qc) return '';
+    if (qc.status === 'failed') return 'QC 실패 · ' + clip(qc.error || '', 160);
+    var rep = qc.report || {};
+    var verdict = String(rep.verdict || '').trim();
+    if (verdict && /문제|반려|실패|fail|ng/i.test(verdict) && !/통과|pass/i.test(verdict)) return 'QC 판정 · ' + clip(verdict, 80);
+    var text = String(rep.summary || '') + '\n' + String(rep.detail || '');
+    if (/문제\s*있음|검수\s*반려|검수\s*실패|여파\s*큼/.test(text)) return 'QC 보고에 문제가 적혀 있어요';
+    return '';
+}
+/* 화면에서 반영할 때 쓰는 것과 같은 길 — 저장만 조용히 해요 */
+async function commitCodeSilent(sec, code) {
+    if (!S.ai || !S.ai.codeToken) return { ok: false, error: '코드 열쇠(codeToken)가 없어 자동 반영을 하지 못했어요', noToken: true };
+    var cur = await ghGetAt(code.repo, code.path, S.ai.codeToken);
+    if (!cur.ok) return { ok: false, error: cur.error || '파일을 읽지 못했어요' };
+    var oldText = cur.missing ? '' : String(cur.raw || '');
+    var next = null;
+    if (Object.prototype.toString.call(code.edits) === '[object Array]' && code.edits.length) {
+      var ap = applyEdits(oldText, code.edits);
+      if (!ap.ok) return { ok: false, error: ap.error || '찾아 바꾸기를 적용하지 못했어요' };
+      next = ap.text;
+    } else if (code.content != null) {
+      next = String(code.content);
+    } else if (code.range && code.range.start != null) {
+      var arr = oldText.split('\n');
+      var st = clamp(Number(code.range.start) || 1, 1, Math.max(1, arr.length));
+      var en = clamp(Number(code.range.end) || st, st, Math.max(1, arr.length));
+      next = arr.slice(0, st - 1).concat(String(code.range.text || '').split('\n')).concat(arr.slice(en)).join('\n');
+    }
+    if (next == null) return { ok: false, error: '반영할 내용이 없어요' };
+    if (next === oldText) return { ok: true, repo: code.repo, path: code.path, sha: cur.sha || '', at: nowIso(), unchanged: true };
+    var chk = await checkCodeFile(code.path, next);
+    if (!chk.ok) return { ok: false, error: '자동 검사에서 문제가 보여 반영하지 않았어요' };
+    var w = await ghPutAt(code.repo, code.path, next, '🏢 ' + OFFICE_NAME + ': ' + clip(sec.title, 60) + ' (QC 통과 · 자동 반영)', S.ai.codeToken);
+    if (!w.ok) return { ok: false, error: w.error || '저장하지 못했어요' };
+    return { ok: true, repo: code.repo, path: code.path, at: nowIso() };
+}
+/* 한 단계가 끝나면 다음 팀을 바로 돌리지 않고 피클 중간 검수로 멈춰요 (일꾼과 같은 규칙) */
+function pauseForPicoLocal(sec, child, stepIdx, ids, nextIdx) {
+    var team = teamById(child.teamId) || { name: child.teamId };
+    var nxChild = nextIdx >= 0 ? workById(ids[nextIdx]) : null;
+    var nxTeam = nxChild ? (teamById(nxChild.teamId) || { name: nxChild.teamId }) : null;
+    var rep = child.report || {};
+    sec.status = 'working';
+    sec.phase = 'step_review';
+    if (isPicoWork(sec)) sec.picoStatus = 'step_review';
+    sec.picoReviewAt = '';
+    sec.currentChildId = '';
+    sec.stepReview = {
+      childId: child.id, teamId: child.teamId, teamName: team.name,
+      stepIdx: stepIdx, stepNo: stepIdx + 1, totalSteps: ids.length,
+      childStatus: String(child.status || ''), failed: child.status === 'failed',
+      hasCode: !!child.code,
+      code: child.code ? { repo: child.code.repo, path: child.code.path, added: child.code.added, removed: child.code.removed, checkOk: !!child.code.checkOk } : null,
+      summary: clip(rep.summary || '', 900), detail: clip(rep.detail || '', 1600), verdict: String(rep.verdict || ''),
+      nextStepIdx: nextIdx, nextStepNo: nextIdx >= 0 ? nextIdx + 1 : 0,
+      nextChildId: nxChild ? nxChild.id : '', nextTeamId: nxChild ? nxChild.teamId : '', nextTeamName: nxTeam ? nxTeam.name : '',
+      at: nowIso()
+    };
+    pushLog(sec, (child.status === 'failed' ? team.name + ' 실패 · ' : team.name + ' 단계 끝 · ') +
+      '피클 중간 검수 대기 (' + (stepIdx + 1) + '/' + ids.length + ')' + (nxTeam ? ' → 다음 ' + nxTeam.name : ' → 마지막 단계'));
+}
 async function runPipeline(secId) {
     var sec = workById(secId);
     if (!sec) return;
@@ -298,71 +389,140 @@ async function runPipeline(secId) {
     S.busy['pipe_' + secId] = { at: Date.now() };
     try {
       var ids = (sec.childIds || []).slice();
-      for (var i = 0; i < ids.length; i++) {
-        var child = workById(ids[i]);
-        if (!child) continue;
-        if (child.status === 'done') continue;
-        var prior = [];
-        for (var k = 0; k < i; k++) {
-          var pc = workById(ids[k]);
-          if (pc && pc.report) prior.push(pc.id);
-        }
-        child.materialIds = prior.slice(-2);
-        child.status = 'working';
-        child.startedAt = nowIso();
-        child.updatedAt = nowIso();
-        sec.currentChildId = child.id;
-        sec.updatedAt = nowIso();
-        S.busy[child.id] = { at: Date.now() };
-        var tname = (teamById(child.teamId) || { name: child.teamId }).name;
-        pushLog(sec, tname + '에 일을 전달 (' + (i + 1) + '/' + ids.length + ')');
-        renderAll(); saveOfficeSoon(0);
-        await runChildSafe(child, sec, tname);
-        delete S.busy[child.id];
-        child.updatedAt = nowIso();
-        sec.updatedAt = nowIso();
-        renderAll(); saveOfficeSoon(0);
-      }
-      sec.phase = 'collect';
-      pushLog(sec, '비서 취합 보고 작성 중');
-      renderAll(); saveOfficeSoon(0);
-      /* 하위 개발팀이 만든 수정안을 비서 일에 먼저 붙여요 */
-      if (!sec.code) sec.code = pickChildCode(sec);
-      /* 코드 수정이 필요한 일인데 수정안이 비어 있으면, 실패로 올리기 전에 개발팀에 한 번 더 자동 요청해요 */
-      if (!sec.code && codeIntent(sec) && !sec.codeRedoId) {
-        sec.codeWanted = true;
-        await autoCodeRedo(sec);
-      }
-      if (!sec.code && codeIntent(sec)) {
-        sec.codeMissing = true;
-        pushLog(sec, '코드 수정안이 끝까지 만들어지지 않음 · 결재함에서 다시 요청하거나 반려 후 삭제를 골라 주세요');
-      }
-      /* 1F 비서실이 맡은 일이면 외부 모델로 취합 보고를 쓰지 않고 피클에게 넘겨요 */
-      if (isPicoWork(sec)) {
-        sec.status = 'working';
-        sec.phase = 'collect';
-        sec.picoStatus = 'report';
-        sec.picoReportAt = nowIso();
-        sec.currentChildId = '';
-        pushLog(sec, '팀 결과 도착 · 피클 최종 취합 보고 대기');
-        renderAll(); saveOfficeSoon(0);
-        startPolling();   /* 피클이 보고를 올리면 화면에 바로 보이게 */
+      var stepIdx = nextChildStep(ids);
+      if (stepIdx < 0) {
+        await finishPipelineLocal(sec);
         return;
       }
-      var rep = await buildCollectReport(sec);
-      sec.report = rep.report;
-      sec.secretary = rep.secretary;
-      sec.code = rep.code || sec.code || null;
-      sec.status = 'waiting';
-      sec.phase = 'report';
+      var child = workById(ids[stepIdx]);
+      if (!child) return;
+      var prior = [];
+      for (var k = 0; k < stepIdx; k++) {
+        var pc = workById(ids[k]);
+        if (pc && (pc.report || pc.code)) prior.push(pc.id);
+      }
+      child.materialIds = prior.slice(-2);
+      /* QC에는 앞 단계 개발팀의 실제 수정안을 그대로 넘겨요 */
+      if (child.teamId === 'qc') {
+        var src = null;
+        for (var q = stepIdx - 1; q >= 0; q--) { var qc0 = workById(ids[q]); if (qc0 && qc0.code) { src = qc0; break; } }
+        var code0 = src ? src.code : (sec.code || null);
+        if (code0) {
+          child.codeUnderReview = code0;
+          if (!child.code) child.code = code0;
+          if (src) child.reviewOf = src.id;
+          pushLog(child, '검수할 수정안 받음 · ' + fileLabel(code0.repo, code0.path));
+        }
+      }
+      child.status = 'working';
+      child.startedAt = child.startedAt || nowIso();
+      child.updatedAt = nowIso();
+      sec.currentChildId = child.id;
       sec.updatedAt = nowIso();
-      pushLog(sec, '비서 최종 취합 보고 → 대표실 결재 대기');
-      toast('비서가 최종 취합 보고를 올렸어요. 대표실 결재함에서 확인해 주세요.');
+      S.busy[child.id] = { at: Date.now() };
+      var tname = (teamById(child.teamId) || { name: child.teamId }).name;
+      pushLog(sec, tname + '에 일을 전달 (' + (stepIdx + 1) + '/' + ids.length + ')');
+      renderAll(); saveOfficeSoon(0);
+      await runChildSafe(child, sec, tname);
+      delete S.busy[child.id];
+      child.updatedAt = nowIso();
+      sec.updatedAt = nowIso();
+      renderAll(); saveOfficeSoon(0);
+      var nextIdx = nextChildStep(ids);
+      if (nextIdx < 0) { await finishPipelineLocal(sec); return; }
+      pauseForPicoLocal(sec, child, stepIdx, ids, nextIdx);
+      toast('한 단계가 끝났어요. 피클이 검수하고 다음 팀으로 넘겨요.');
     } finally {
       delete S.busy['pipe_' + secId];
       if (sec) { sec.updatedAt = nowIso(); sec.currentChildId = ''; }
       renderAll(); saveOfficeSoon(0);
     }
+}
+/* 마지막 단계까지 끝났을 때 — QC 통과 확인 → (저·중위험) 자동 반영 → 취합 보고 */
+async function finishPipelineLocal(sec) {
+    var kids = secChildList(sec);
+    sec.phase = 'collect';
+    pushLog(sec, '비서 취합 보고 작성 중');
+    renderAll(); saveOfficeSoon(0);
+    /* 하위 개발팀이 만든 수정안을 비서 일에 먼저 붙여요 */
+    if (!sec.code) sec.code = pickChildCode(sec);
+    /* 코드 수정이 필요한 일인데 수정안이 비어 있으면, 실패로 올리기 전에 개발팀에 한 번 더 자동 요청해요 */
+    if (!sec.code && codeIntent(sec) && !sec.codeRedoId) {
+      sec.codeWanted = true;
+      await autoCodeRedo(sec);
+    }
+    if (!sec.code && codeIntent(sec)) {
+      sec.codeMissing = true;
+      pushLog(sec, '코드 수정안이 끝까지 만들어지지 않음 · 결재함에서 다시 요청하거나 반려 후 삭제를 골라 주세요');
+    }
+    /* 자동 반영 판단 — QC 통과 + 여파가 크지 않은 변경만 */
+    sec.highRisk = false;
+    sec.riskReason = '';
+    if (sec.code && !(sec.code.commit && sec.code.commit.ok)) {
+      var qc = null;
+      for (var i = kids.length - 1; i >= 0; i--) if (kids[i] && kids[i].teamId === 'qc') { qc = kids[i]; break; }
+      var problem = qcProblemLocal(qc);
+      var risk = riskOfChangeLocal(sec, sec.code, kids);
+      if (!qc) {
+        sec.qcVerdict = 'skipped';
+        pushLog(sec, 'QC 검수 없이 끝나 자동 반영은 보류 · 대표님 확인으로 올려요');
+      } else if (problem) {
+        sec.qcVerdict = 'problem';
+        sec.qcNote = problem;
+        pushLog(sec, '자동 반영 보류 · ' + problem);
+      } else if (risk.high) {
+        sec.highRisk = true;
+        sec.riskReason = risk.reasons.join(' · ');
+        pushLog(sec, '여파가 큰 변경이라 자동 반영하지 않음 · ' + clip(sec.riskReason, 160));
+      } else if (sec.code.checkOk === false) {
+        pushLog(sec, '자동 검사에 문제가 있어 자동 반영하지 않음');
+      } else {
+        var c = await commitCodeSilent(sec, sec.code);
+        if (c.ok) {
+          sec.code.commit = { ok: true, at: c.at || nowIso(), repo: c.repo, path: c.path, sha: c.sha || '', auto: true, unchanged: !!c.unchanged };
+          sec.commit = sec.code.commit;
+          sec.autoCommit = sec.code.commit;
+          sec.nextDone = true;
+          sec.nextAt = nowIso();
+          sec.qcVerdict = 'pass';
+          pushLog(sec, 'QC 통과 · 자동 반영 완료 · ' + fileLabel(c.repo, c.path));
+        } else {
+          sec.autoCommit = { ok: false, at: nowIso(), error: String(c.error || ''), noToken: !!c.noToken };
+          pushLog(sec, c.noToken
+            ? '자동 반영 보류 · 코드 열쇠(codeToken)가 아직 없어요 · 사무실 ⚙️ 설정에서 넣으면 다음부터 자동 반영돼요'
+            : '자동 반영 실패 · ' + clip(String(c.error || ''), 140) + ' · 대표님 승인 대기로 올려요');
+        }
+        renderAll(); saveOfficeSoon(0);
+      }
+    }
+    /* 1F 비서실이 맡은 일이면 외부 모델로 취합 보고를 쓰지 않고 피클에게 넘겨요 */
+    if (isPicoWork(sec)) {
+      sec.status = (sec.autoCommit && sec.autoCommit.ok) ? 'done' : 'working';
+      sec.phase = 'collect';
+      sec.picoStatus = 'report';
+      sec.picoReportAt = nowIso();
+      sec.currentChildId = '';
+      pushLog(sec, '팀 결과 도착 · 피클 최종 보고 대기' + (sec.autoCommit && sec.autoCommit.ok ? ' (자동 반영 완료)' : (sec.highRisk ? ' (여파 큰 변경 · 최종 승인 필요)' : '')));
+      renderAll(); saveOfficeSoon(0);
+      startPolling();
+      return;
+    }
+    var rep = await buildCollectReport(sec);
+    sec.report = rep.report;
+    sec.secretary = rep.secretary;
+    sec.code = rep.code || sec.code || null;
+    if (sec.autoCommit && sec.autoCommit.ok) {
+      sec.status = 'done';
+      sec.nextDone = true;
+      sec.nextAt = nowIso();
+    } else {
+      sec.status = 'waiting';
+    }
+    sec.phase = 'report';
+    sec.updatedAt = nowIso();
+    pushLog(sec, sec.autoCommit && sec.autoCommit.ok ? '비서 최종 보고 → 최근 마무리 (자동 반영 완료)' : (sec.highRisk ? '비서 최종 보고 → 대표실 결재 대기 (여파 큰 변경)' : '비서 최종 취합 보고 → 대표실 결재 대기'));
+    if (sec.autoCommit && sec.autoCommit.ok) toast('QC를 통과해 코드에 자동으로 반영했어요. 결과를 최근 마무리에 남겼어요.');
+    else toast('비서가 최종 보고를 올렸어요. 대표실 결재함에서 확인해 주세요.');
 }
 
 /* ---------- 자동 재처리 (중간 오류·타임아웃· code_edit 누락) ---------- */
